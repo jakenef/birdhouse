@@ -5,7 +5,8 @@ import { PropertyNav, type PropertyTab } from "./components/PropertyNav";
 import { Alerts } from "./pages/Alerts";
 import { Home } from "./pages/Home";
 import { PropertyDocuments } from "./pages/PropertyDocuments";
-import { PropertyMessages } from "./pages/PropertyMessages";
+import { PropertyEmailDetail } from "./pages/PropertyEmailDetail";
+import { PropertyInbox } from "./pages/PropertyInbox";
 import { PropertyPipeline } from "./pages/PropertyPipeline";
 import { Settings } from "./pages/Settings";
 import "./App.css";
@@ -26,6 +27,7 @@ type Route =
       kind: "property";
       propertyId: string;
       tab: PropertyTab;
+      threadId: string | null;
       needsRedirect: boolean;
     };
 
@@ -41,15 +43,37 @@ function parseRoute(path: string): Route {
         kind: "property",
         propertyId,
         tab: "pipeline",
+        threadId: null,
         needsRedirect: true,
       };
     }
 
-    if (tab === "pipeline" || tab === "messages" || tab === "documents") {
+    if (tab === "messages") {
+      return {
+        kind: "property",
+        propertyId,
+        tab: "inbox",
+        threadId: segments[3] ? decodeURIComponent(segments[3]) : null,
+        needsRedirect: true,
+      };
+    }
+
+    if (tab === "inbox") {
+      return {
+        kind: "property",
+        propertyId,
+        tab: "inbox",
+        threadId: segments[3] ? decodeURIComponent(segments[3]) : null,
+        needsRedirect: false,
+      };
+    }
+
+    if (tab === "pipeline" || tab === "documents") {
       return {
         kind: "property",
         propertyId,
         tab,
+        threadId: null,
         needsRedirect: false,
       };
     }
@@ -58,6 +82,7 @@ function parseRoute(path: string): Route {
       kind: "property",
       propertyId,
       tab: "pipeline",
+      threadId: null,
       needsRedirect: true,
     };
   }
@@ -102,8 +127,13 @@ function App() {
       return;
     }
 
-    const normalizedPath = `/property/${encodeURIComponent(route.propertyId)}/pipeline`;
-    if (path === normalizedPath) {
+    const base = `/property/${encodeURIComponent(route.propertyId)}/${route.tab}`;
+    const normalizedPath =
+      route.tab === "inbox" && route.threadId
+        ? `${base}/${encodeURIComponent(route.threadId)}`
+        : base;
+
+    if (normalizedPath === path) {
       return;
     }
 
@@ -140,25 +170,44 @@ function App() {
 
   const renderActivePage = () => {
     if (route.kind === "property") {
-      const toHome = () => navigate("/");
-
       if (route.tab === "pipeline") {
-        return <PropertyPipeline propertyId={route.propertyId} onBackToHome={toHome} />;
+        return (
+          <PropertyPipeline
+            propertyId={route.propertyId}
+            onBackToHome={() => navigate("/")}
+          />
+        );
       }
 
-      if (route.tab === "messages") {
+      if (route.tab === "documents") {
         return (
-          <PropertyMessages
+          <PropertyDocuments
             propertyId={route.propertyId}
-            onBackToHome={toHome}
+            onBackToHome={() => navigate("/")}
+          />
+        );
+      }
+
+      if (route.threadId) {
+        return (
+          <PropertyEmailDetail
+            propertyId={route.propertyId}
+            threadId={route.threadId}
+            onBackToInbox={() =>
+              navigate(`/property/${encodeURIComponent(route.propertyId)}/inbox`)
+            }
           />
         );
       }
 
       return (
-        <PropertyDocuments
+        <PropertyInbox
           propertyId={route.propertyId}
-          onBackToHome={toHome}
+          onOpenThread={(threadId) =>
+            navigate(
+              `/property/${encodeURIComponent(route.propertyId)}/inbox/${encodeURIComponent(threadId)}`,
+            )
+          }
         />
       );
     }
@@ -173,7 +222,9 @@ function App() {
 
     return (
       <Home
-        onOpenDeal={(dealId) => navigate(`/property/${encodeURIComponent(dealId)}`)}
+        onOpenDeal={(dealId) =>
+          navigate(`/property/${encodeURIComponent(dealId)}`)
+        }
       />
     );
   };
