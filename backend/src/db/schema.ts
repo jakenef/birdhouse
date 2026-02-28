@@ -105,3 +105,41 @@ export const documents = sqliteTable("documents", {
 
 export type Document = typeof documents.$inferSelect;
 export type NewDocument = typeof documents.$inferInsert;
+
+// ---------------------------------------------------------------------------
+// Inbox messages — emails sent to/from property email addresses
+// ---------------------------------------------------------------------------
+
+export const inboxMessages = sqliteTable("inbox_messages", {
+  id: text("id").primaryKey(), // our internal ID (e.g., "im_xxx")
+  resendEmailId: text("resend_email_id").unique(), // Resend's email ID (for dedup)
+  propertyId: text("property_id").notNull(), // FK to properties.id
+  threadId: text("thread_id").notNull(), // computed thread grouping ID
+
+  direction: text("direction").notNull(), // "inbound" | "outbound"
+
+  fromEmail: text("from_email").notNull(),
+  fromName: text("from_name"),
+  toJson: text("to_json").notNull(), // JSON array of {email, name}
+  ccJson: text("cc_json"), // JSON array of {email, name}
+  bccJson: text("bcc_json"), // JSON array of {email, name}
+
+  subject: text("subject").notNull(),
+  bodyText: text("body_text"),
+  bodyHtml: text("body_html"),
+
+  // Email headers for threading
+  messageId: text("message_id"), // Message-ID header
+  inReplyTo: text("in_reply_to"), // In-Reply-To header
+  referencesJson: text("references_json"), // JSON array of message IDs
+
+  hasAttachments: integer("has_attachments").default(0), // 0 or 1
+  read: integer("read").default(0), // 0 or 1
+
+  sentAt: text("sent_at").notNull(), // when the email was sent
+  readAt: text("read_at"), // when marked read
+  createdAt: text("created_at").notNull(), // when we stored it
+});
+
+export type InboxMessage = typeof inboxMessages.$inferSelect;
+export type NewInboxMessage = typeof inboxMessages.$inferInsert;

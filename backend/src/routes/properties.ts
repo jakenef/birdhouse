@@ -1,6 +1,7 @@
 import express, { Request, Response } from "express";
 import path from "path";
 import { promises as fs } from "fs";
+import { Resend } from "resend";
 
 import { ParsedPurchaseContract } from "../schemas/parsedPurchaseContract.schema";
 import {
@@ -13,6 +14,7 @@ import {
   StreetViewService,
 } from "../services/googleStreetView";
 import { DocumentStore } from "../services/documentStore";
+import { InboxStore } from "../services/inboxStore";
 import { StreetViewCacheEntry } from "../types/property";
 import { toPropertyCardDto } from "../utils/propertyCard";
 
@@ -111,6 +113,7 @@ export function createPropertiesRouter(
   propertyStore: PropertyStore,
   streetViewService: StreetViewService,
   documentStore: DocumentStore,
+  inboxStore: InboxStore,
 ) {
   const router = express.Router();
 
@@ -382,32 +385,7 @@ export function createPropertiesRouter(
   // -------------------------------------------------------------------------
   // GET /properties/:propertyId/inbox
   //
-  // Returns email threads for a property's inbox (like Gmail).
-  // Shows emails sent TO or FROM the property's email address.
-  //
-  // Response shape:
-  //   {
-  //     property_email: "montauk-ave-445@bronaaelda.resend.app",
-  //     threads: Array<{
-  //       id: string;                    // Thread ID (e.g., "thread_abc123")
-  //       subject: string;               // Email subject line
-  //       participants: Array<{          // All participants in thread
-  //         email: string;
-  //         name: string | null;
-  //       }>;
-  //       preview: string;               // First ~100 chars of latest message
-  //       message_count: number;         // Number of messages in thread
-  //       has_attachments: boolean;      // True if any message has attachments
-  //       unread: boolean;               // True if any message is unread
-  //       last_message_at: string;       // ISO 8601 timestamp of latest message
-  //       last_message_from: string;     // Email address of latest sender
-  //       created_at: string;            // ISO 8601 timestamp of thread start
-  //     }>
-  //   }
-  //
-  // TODO: Implement real email fetching from Resend or email provider
-  // TODO: Add pagination (query params: ?limit=50&cursor=abc)
-  // TODO: Add filtering (query params: ?unread=true&has_attachments=true)
+  // Returns email threads for a property's inbox.
   // -------------------------------------------------------------------------
   router.get(
     "/properties/:propertyId/inbox",
@@ -422,53 +400,11 @@ export function createPropertiesRouter(
           return;
         }
 
-        // Mock data for frontend development
-        const mockThreads = [
-          {
-            id: "thread_abc123",
-            subject: "Title insurance documents",
-            participants: [
-              { email: "title@titlecompany.com", name: "Sarah Chen" },
-              { email: property.property_email || "", name: null },
-            ],
-            preview:
-              "Hi, attached are the preliminary title insurance documents for your review...",
-            message_count: 3,
-            has_attachments: true,
-            unread: true,
-            last_message_at: new Date(
-              Date.now() - 2 * 60 * 60 * 1000,
-            ).toISOString(),
-            last_message_from: "title@titlecompany.com",
-            created_at: new Date(
-              Date.now() - 48 * 60 * 60 * 1000,
-            ).toISOString(),
-          },
-          {
-            id: "thread_def456",
-            subject: "Inspection report available",
-            participants: [
-              { email: "inspector@homeinspect.com", name: "Mike Johnson" },
-              { email: property.property_email || "", name: null },
-            ],
-            preview:
-              "The inspection has been completed. Please see the attached report...",
-            message_count: 2,
-            has_attachments: true,
-            unread: false,
-            last_message_at: new Date(
-              Date.now() - 24 * 60 * 60 * 1000,
-            ).toISOString(),
-            last_message_from: "inspector@homeinspect.com",
-            created_at: new Date(
-              Date.now() - 72 * 60 * 60 * 1000,
-            ).toISOString(),
-          },
-        ];
+        const threads = await inboxStore.listThreadsByPropertyId(property.id);
 
         res.json({
           property_email: property.property_email,
-          threads: mockThreads,
+          threads,
         });
       } catch (error) {
         res.status(500).json({
@@ -487,42 +423,6 @@ export function createPropertiesRouter(
   // GET /properties/:propertyId/inbox/:threadId
   //
   // Returns all messages in an email thread (conversation view).
-  //
-  // Response shape:
-  //   {
-  //     thread: {
-  //       id: string;
-  //       subject: string;
-  //       participants: Array<{ email: string; name: string | null }>;
-  //       created_at: string;
-  //     },
-  //     messages: Array<{
-  //       id: string;                    // Message ID (e.g., "msg_xyz789")
-  //       from: {
-  //         email: string;
-  //         name: string | null;
-  //       };
-  //       to: Array<{ email: string; name: string | null }>;
-  //       cc: Array<{ email: string; name: string | null }>;
-  //       subject: string;
-  //       body_text: string;             // Plain text version
-  //       body_html: string | null;      // HTML version (optional)
-  //       attachments: Array<{
-  //         id: string;
-  //         filename: string;
-  //         mime_type: string;
-  //         size_bytes: number;
-  //         download_url: string;        // e.g., "/api/properties/:id/inbox/:threadId/attachments/:attachmentId"
-  //       }>;
-  //       sent_at: string;               // ISO 8601 timestamp
-  //       read: boolean;
-  //       direction: "inbound" | "outbound";  // Relative to property email
-  //     }>
-  //   }
-  //
-  // TODO: Implement real message fetching from email provider
-  // TODO: Mark messages as read when fetched
-  // TODO: Support message actions (archive, delete, mark unread)
   // -------------------------------------------------------------------------
   router.get(
     "/properties/:propertyId/inbox/:threadId",
@@ -537,74 +437,96 @@ export function createPropertiesRouter(
           return;
         }
 
-        // Mock thread data
-        const mockThread = {
-          id: req.params.threadId,
-          subject: "Title insurance documents",
-          participants: [
-            { email: "title@titlecompany.com", name: "Sarah Chen" },
-            { email: property.property_email || "", name: null },
-          ],
-          created_at: new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString(),
-        };
+        const messages = await inboxStore.getThread(
+          property.id,
+          req.params.threadId,
+        );
 
-        const mockMessages = [
-          {
-            id: "msg_001",
-            from: { email: "title@titlecompany.com", name: "Sarah Chen" },
-            to: [{ email: property.property_email || "", name: null }],
-            cc: [],
-            subject: "Title insurance documents",
-            body_text:
-              "Hi,\n\nAttached are the preliminary title insurance documents for your review. Please let me know if you have any questions.\n\nBest regards,\nSarah",
-            body_html: null,
-            attachments: [
-              {
-                id: "att_001",
-                filename: "preliminary_title_report.pdf",
-                mime_type: "application/pdf",
-                size_bytes: 245678,
-                download_url: `/api/properties/${req.params.propertyId}/inbox/${req.params.threadId}/attachments/att_001`,
-              },
-            ],
-            sent_at: new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString(),
-            read: true,
-            direction: "inbound" as const,
-          },
-          {
-            id: "msg_002",
-            from: { email: property.property_email || "", name: null },
-            to: [{ email: "title@titlecompany.com", name: "Sarah Chen" }],
-            cc: [],
-            subject: "Re: Title insurance documents",
-            body_text:
-              "Thanks Sarah. Reviewed the documents and everything looks good. When can we move forward?",
-            body_html: null,
-            attachments: [],
-            sent_at: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
-            read: true,
-            direction: "outbound" as const,
-          },
-          {
-            id: "msg_003",
-            from: { email: "title@titlecompany.com", name: "Sarah Chen" },
-            to: [{ email: property.property_email || "", name: null }],
-            cc: [],
-            subject: "Re: Title insurance documents",
-            body_text:
-              "Great! I'll send over the final documents tomorrow morning. We can schedule the signing for next week.",
-            body_html: null,
-            attachments: [],
-            sent_at: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
-            read: true,
-            direction: "inbound" as const,
-          },
-        ];
+        if (messages.length === 0) {
+          res.status(404).json({
+            error: { message: "Thread not found." },
+          });
+          return;
+        }
+
+        // Collect unique participants
+        const participantMap = new Map<
+          string,
+          { email: string; name: string | null }
+        >();
+        for (const msg of messages) {
+          participantMap.set(msg.from_email, {
+            email: msg.from_email,
+            name: msg.from_name,
+          });
+          for (const p of msg.to) {
+            if (!participantMap.has(p.email)) {
+              participantMap.set(p.email, p);
+            }
+          }
+        }
 
         res.json({
-          thread: mockThread,
-          messages: mockMessages,
+          thread: {
+            id: req.params.threadId,
+            subject: messages[0].subject,
+            participants: Array.from(participantMap.values()),
+            created_at: messages[0].sent_at,
+          },
+          messages,
         });
+      } catch (error) {
+        res.status(500).json({
+          error: {
+            message:
+              error instanceof Error
+                ? error.message
+                : "Unexpected server error",
+          },
+        });
+      }
+    },
+  );
+
+  // -------------------------------------------------------------------------
+  // PATCH /properties/:propertyId/inbox/emails/:messageId
+  //
+  // Mark an email as read or unread.
+  // Request body: { read: boolean }
+  // -------------------------------------------------------------------------
+  router.patch(
+    "/properties/:propertyId/inbox/emails/:messageId",
+    async (req: Request, res: Response) => {
+      try {
+        const property = await propertyStore.findById(req.params.propertyId);
+
+        if (!property) {
+          res.status(404).json({
+            error: { message: "Property not found." },
+          });
+          return;
+        }
+
+        const { read } = req.body;
+        if (typeof read !== "boolean") {
+          res.status(400).json({
+            error: {
+              message: "Missing or invalid 'read' field (must be boolean).",
+            },
+          });
+          return;
+        }
+
+        const message = await inboxStore.markRead(req.params.messageId, read);
+
+        if (!message) {
+          res.status(404).json({
+            error: { message: "Message not found." },
+          });
+          return;
+        }
+
+        res.json({ message });
       } catch (error) {
         res.status(500).json({
           error: {
@@ -621,44 +543,7 @@ export function createPropertiesRouter(
   // -------------------------------------------------------------------------
   // POST /properties/:propertyId/inbox/send
   //
-  // Sends an email FROM the property's email address.
-  // Used by frontend to reply to threads or compose new emails.
-  //
-  // Request body:
-  //   {
-  //     to: Array<string>;               // Email addresses (required)
-  //     cc?: Array<string>;              // CC recipients (optional)
-  //     bcc?: Array<string>;             // BCC recipients (optional)
-  //     subject: string;                 // Subject line (required)
-  //     body: string;                    // Email body, plain text (required)
-  //     body_html?: string;              // HTML version of body (optional)
-  //     reply_to_message_id?: string;    // If replying, the message ID
-  //     reply_to_thread_id?: string;     // If replying, the thread ID
-  //     attachments?: Array<{
-  //       filename: string;
-  //       content_base64: string;        // Base64-encoded file content
-  //       mime_type: string;
-  //     }>;
-  //   }
-  //
-  // Response shape:
-  //   {
-  //     message: {
-  //       id: string;                    // New message ID
-  //       thread_id: string;             // Thread ID (new or existing)
-  //       sent_at: string;               // ISO 8601 timestamp
-  //       from: string;                  // Property email address
-  //       to: Array<string>;
-  //       subject: string;
-  //     }
-  //   }
-  //
-  // TODO: Implement real email sending via Resend API
-  // TODO: Handle attachments (upload to storage, include in email)
-  // TODO: Thread association logic (group replies into threads)
-  // TODO: Rate limiting per property
-  // TODO: Validate email addresses
-  // TODO: Store sent messages in database for sent folder
+  // Sends an email FROM the property's email address via Resend API.
   // -------------------------------------------------------------------------
   router.post(
     "/properties/:propertyId/inbox/send",
@@ -673,8 +558,16 @@ export function createPropertiesRouter(
           return;
         }
 
+        if (!property.property_email) {
+          res.status(400).json({
+            error: { message: "Property does not have an email address." },
+          });
+          return;
+        }
+
         // Validate required fields
-        const { to, subject, body } = req.body;
+        const { to, subject, body, body_html, cc, bcc, reply_to_message_id } =
+          req.body;
         if (!to || !Array.isArray(to) || to.length === 0) {
           res.status(400).json({
             error: {
@@ -699,19 +592,102 @@ export function createPropertiesRouter(
           return;
         }
 
-        // Mock response - in real implementation, this would call Resend API
-        const mockMessageId = `msg_${Date.now()}_${Math.random().toString(36).substring(7)}`;
-        const mockThreadId =
-          req.body.reply_to_thread_id || `thread_${Date.now()}`;
+        // Build threading headers if replying
+        const customHeaders: Record<string, string> = {};
+        let replyToThreadId: string | undefined;
+        let inReplyToHeader: string | undefined;
+        const referencesArr: string[] = [];
+
+        if (reply_to_message_id) {
+          const parentMsg = await inboxStore.findById(reply_to_message_id);
+          if (parentMsg) {
+            replyToThreadId = parentMsg.thread_id;
+            if (parentMsg.message_id) {
+              inReplyToHeader = parentMsg.message_id;
+              customHeaders["In-Reply-To"] = parentMsg.message_id;
+              // Build References chain
+              const parentRefs = parentMsg.references || [];
+              referencesArr.push(...parentRefs, parentMsg.message_id);
+              customHeaders["References"] = referencesArr.join(" ");
+            }
+          }
+        }
+
+        // Send via Resend API
+        const apiKey = process.env.RESEND_API_KEY;
+        if (!apiKey) {
+          res.status(500).json({
+            error: { message: "RESEND_API_KEY not configured." },
+          });
+          return;
+        }
+
+        const resend = new Resend(apiKey);
+
+        const sendPayload: any = {
+          from: property.property_email,
+          to,
+          subject,
+          text: body,
+          replyTo: property.property_email,
+        };
+        if (body_html) sendPayload.html = body_html;
+        if (cc && Array.isArray(cc)) sendPayload.cc = cc;
+        if (bcc && Array.isArray(bcc)) sendPayload.bcc = bcc;
+        if (Object.keys(customHeaders).length > 0) {
+          sendPayload.headers = customHeaders;
+        }
+
+        const { data: sendResult, error: sendError } =
+          await resend.emails.send(sendPayload);
+
+        if (sendError || !sendResult) {
+          res.status(502).json({
+            error: {
+              message: `Send failed: ${sendError?.message ?? "Unknown error"}`,
+            },
+          });
+          return;
+        }
+
+        const sentEmailId = (sendResult as any).id;
+
+        // Store in inbox immediately
+        const toArr = to.map((addr: string) => ({
+          email: addr,
+          name: null,
+        }));
+        const ccArr = (cc ?? []).map((addr: string) => ({
+          email: addr,
+          name: null,
+        }));
+
+        const storedMessage = await inboxStore.createMessage({
+          resendEmailId: sentEmailId,
+          propertyId: property.id,
+          direction: "outbound",
+          fromEmail: property.property_email,
+          fromName: null,
+          to: toArr,
+          cc: ccArr,
+          subject,
+          bodyText: body,
+          bodyHtml: body_html ?? null,
+          messageId: null, // Resend doesn't return Message-ID on send
+          inReplyTo: inReplyToHeader ?? null,
+          references: referencesArr,
+          hasAttachments: false,
+          sentAt: new Date().toISOString(),
+        });
 
         res.status(201).json({
           message: {
-            id: mockMessageId,
-            thread_id: mockThreadId,
-            sent_at: new Date().toISOString(),
-            from: property.property_email || "",
-            to: req.body.to,
-            subject: req.body.subject,
+            id: storedMessage.id,
+            thread_id: storedMessage.thread_id,
+            sent_at: storedMessage.sent_at,
+            from: property.property_email,
+            to,
+            subject,
           },
         });
       } catch (error) {

@@ -10,6 +10,7 @@ import { extractContractFieldsFromDocAi } from "./docai";
 import { parsePurchaseContractWithOpenAi } from "./openai";
 import { PropertyStore, DuplicatePropertyError } from "./propertyStore";
 import { DocumentStore } from "./documentStore";
+import { InboxStore } from "./inboxStore";
 import { db } from "../db";
 import { processedEmails } from "../db/schema";
 
@@ -196,6 +197,7 @@ async function processPropertyEmail(
 
 /**
  * Process a single email with all its PDF attachments.
+ * Also stores the email in inbox_messages for the inbox view.
  */
 async function processEmail(
   resend: Resend,
@@ -204,80 +206,161 @@ async function processEmail(
   isIntakeEmail: boolean,
   store: PropertyStore,
   docStore: DocumentStore,
+  inboxStore: InboxStore,
 ): Promise<void> {
   const pdfAttachments = (email.attachments ?? []).filter(
     (att: { content_type: string }) => att.content_type === "application/pdf",
   );
 
-  if (pdfAttachments.length === 0) {
-    return;
-  }
+  const hasPdfs = pdfAttachments.length > 0;
 
   log(
-    `📬 email from ${email.from} → ${targetEmail} — "${email.subject}" (${pdfAttachments.length} PDF${pdfAttachments.length > 1 ? "s" : ""})`,
+    `📬 email from ${email.from} → ${targetEmail} — "${email.subject}" (${pdfAttachments.length} PDF${pdfAttachments.length !== 1 ? "s" : ""})`,
   );
 
-  for (const att of pdfAttachments) {
+  // --- Save PDFs (existing flow, unchanged) ---
+  if (hasPdfs) {
+    for (const att of pdfAttachments) {
+      try {
+        // Download attachment
+        const { data: attData, error: attError } =
+          await resend.emails.receiving.attachments.get({
+            id: att.id,
+            emailId: email.id,
+          });
+
+        if (attError || !attData) {
+          log(
+            `error downloading attachment: ${attError?.message ?? "No data returned"}`,
+          );
+          continue;
+        }
+
+        const downloadUrl = (attData as { download_url?: string }).download_url;
+        if (!downloadUrl) continue;
+
+        const pdfBuffer = await downloadBuffer(downloadUrl);
+
+        // Save to disk (for both intake and property-specific emails)
+        await fs.mkdir(ATTACHMENTS_DIR, { recursive: true });
+        const safeFilename = (att.filename || "attachment.pdf").replace(
+          /[^a-zA-Z0-9._-]/g,
+          "_",
+        );
+        const savedFilename = `${email.id}_${safeFilename}`;
+        const savedPath = path.join(ATTACHMENTS_DIR, savedFilename);
+        await fs.writeFile(savedPath, pdfBuffer);
+
+        const docHash = sha256(pdfBuffer);
+
+        // Route to appropriate handler
+        if (isIntakeEmail) {
+          await processIntakeEmail(
+            email,
+            att,
+            pdfBuffer,
+            savedFilename,
+            docHash,
+            store,
+            docStore,
+          );
+        } else {
+          await processPropertyEmail(
+            targetEmail,
+            att,
+            pdfBuffer,
+            savedFilename,
+            docHash,
+            store,
+            docStore,
+          );
+        }
+      } catch (err) {
+        if (err instanceof DuplicatePropertyError) {
+          log("skip duplicate");
+        } else {
+          log(`error: ${err instanceof Error ? err.message : String(err)}`);
+        }
+      }
+    }
+  }
+
+  // --- Store email in inbox_messages (for property-specific emails) ---
+  if (!isIntakeEmail) {
     try {
-      // Download attachment
-      const { data: attData, error: attError } =
-        await resend.emails.receiving.attachments.get({
-          id: att.id,
-          emailId: email.id,
-        });
+      // Find property by email address
+      const property = await store.findByPropertyEmail(targetEmail);
+      if (!property) {
+        log(`inbox skip — no property for ${targetEmail}`);
+        return;
+      }
 
-      if (attError || !attData) {
+      // Skip if already stored (dedup by Resend email ID)
+      if (await inboxStore.existsByResendId(email.id)) {
+        return;
+      }
+
+      // Fetch full email content (list endpoint only has metadata)
+      const { data: fullEmail, error: fullError } =
+        await resend.emails.receiving.get(email.id);
+
+      if (fullError || !fullEmail) {
         log(
-          `error downloading attachment: ${attError?.message ?? "No data returned"}`,
+          `error fetching full email: ${fullError?.message ?? "No data returned"}`,
         );
-        continue;
+        return;
       }
 
-      const downloadUrl = (attData as { download_url?: string }).download_url;
-      if (!downloadUrl) continue;
+      const full = fullEmail as any;
 
-      const pdfBuffer = await downloadBuffer(downloadUrl);
+      // Parse sender name from "Name <email>" format
+      const fromStr = full.from || email.from || "";
+      const nameMatch = fromStr.match(/^(.+?)\s*<(.+)>$/);
+      const fromEmail = nameMatch ? nameMatch[2] : fromStr;
+      const fromName = nameMatch ? nameMatch[1].trim() : null;
 
-      // Save to disk (for both intake and property-specific emails)
-      await fs.mkdir(ATTACHMENTS_DIR, { recursive: true });
-      const safeFilename = (att.filename || "attachment.pdf").replace(
-        /[^a-zA-Z0-9._-]/g,
-        "_",
-      );
-      const savedFilename = `${email.id}_${safeFilename}`;
-      const savedPath = path.join(ATTACHMENTS_DIR, savedFilename);
-      await fs.writeFile(savedPath, pdfBuffer);
+      // Parse headers for threading
+      const headers = full.headers || {};
+      const messageIdHeader = full.message_id || headers["message-id"] || null;
+      const inReplyToHeader = headers["in-reply-to"] || null;
+      const referencesHeader = headers["references"] || null;
+      const referencesArr = referencesHeader
+        ? referencesHeader.split(/\s+/).filter(Boolean)
+        : [];
 
-      const docHash = sha256(pdfBuffer);
+      // Build to/cc arrays
+      const toArr = (full.to ?? email.to ?? []).map((addr: string) => ({
+        email: addr,
+        name: null,
+      }));
+      const ccArr = (full.cc ?? []).map((addr: string) => ({
+        email: addr,
+        name: null,
+      }));
 
-      // Route to appropriate handler
-      if (isIntakeEmail) {
-        await processIntakeEmail(
-          email,
-          att,
-          pdfBuffer,
-          savedFilename,
-          docHash,
-          store,
-          docStore,
-        );
-      } else {
-        await processPropertyEmail(
-          targetEmail,
-          att,
-          pdfBuffer,
-          savedFilename,
-          docHash,
-          store,
-          docStore,
-        );
-      }
+      await inboxStore.createMessage({
+        resendEmailId: email.id,
+        propertyId: property.id,
+        direction: "inbound",
+        fromEmail,
+        fromName,
+        to: toArr,
+        cc: ccArr,
+        subject: full.subject || email.subject || "(no subject)",
+        bodyText: full.text || null,
+        bodyHtml: full.html || null,
+        messageId: messageIdHeader,
+        inReplyTo: inReplyToHeader,
+        references: referencesArr,
+        hasAttachments: (email.attachments ?? []).length > 0,
+        sentAt: full.created_at || email.created_at || new Date().toISOString(),
+      });
+
+      log(`📥 inbox stored: "${email.subject}" for ${property.property_name}`);
     } catch (err) {
-      if (err instanceof DuplicatePropertyError) {
-        log("skip duplicate");
-      } else {
-        log(`error: ${err instanceof Error ? err.message : String(err)}`);
-      }
+      log(
+        `inbox store error: ${err instanceof Error ? err.message : String(err)}`,
+      );
     }
   }
 }
@@ -286,7 +369,11 @@ async function pollOnce(
   resend: Resend,
   store: PropertyStore,
   docStore: DocumentStore,
+  inboxStore: InboxStore,
 ): Promise<void> {
+  // -----------------------------------------------------------------------
+  // Phase A: Poll RECEIVED emails
+  // -----------------------------------------------------------------------
   const { data: listData, error: listError } =
     await resend.emails.receiving.list();
 
@@ -295,62 +382,187 @@ async function pollOnce(
     return;
   }
 
-  if (!listData || !listData.data || listData.data.length === 0) {
-    return;
-  }
+  if (listData && listData.data && listData.data.length > 0) {
+    // Categorize emails: intake (creates properties) vs property-specific (adds docs)
+    const intakeEmails: Array<{ email: any; targetEmail: string }> = [];
+    const propertyEmails: Array<{ email: any; targetEmail: string }> = [];
 
-  // Categorize emails: intake (creates properties) vs property-specific (adds docs)
-  const intakeEmails: Array<{ email: any; targetEmail: string }> = [];
-  const propertyEmails: Array<{ email: any; targetEmail: string }> = [];
+    for (const email of listData.data) {
+      // Skip already-processed (DB lookup — survives restarts)
+      if (await isEmailProcessed(email.id)) {
+        continue;
+      }
 
-  for (const email of listData.data) {
-    // Skip already-processed (DB lookup — survives restarts)
-    if (await isEmailProcessed(email.id)) {
-      continue;
+      // Determine recipient email routing
+      const toAddresses = (email.to ?? []).map((a: string) => a.toLowerCase());
+      const domainSuffix = `@${EMAIL_DOMAIN.toLowerCase()}`;
+
+      // Find the first address that matches our domain
+      const targetEmail = toAddresses.find((addr) =>
+        addr.endsWith(domainSuffix),
+      );
+
+      if (!targetEmail) {
+        // Not sent to our domain at all
+        await markEmailProcessed(email.id);
+        continue;
+      }
+
+      // Categorize by recipient (no longer filter by PDF-only for property emails)
+      const isIntakeEmail = targetEmail === INTAKE_ADDRESS.toLowerCase();
+      if (isIntakeEmail) {
+        // Intake emails still need PDFs
+        const pdfAttachments = (email.attachments ?? []).filter(
+          (att: { content_type: string }) =>
+            att.content_type === "application/pdf",
+        );
+        if (pdfAttachments.length === 0) {
+          await markEmailProcessed(email.id);
+          continue;
+        }
+        intakeEmails.push({ email, targetEmail });
+      } else {
+        // Property-specific emails — process ALL (PDFs go to docs, everything stored in inbox)
+        propertyEmails.push({ email, targetEmail });
+      }
     }
 
-    // Determine recipient email routing
-    const toAddresses = (email.to ?? []).map((a: string) => a.toLowerCase());
-    const domainSuffix = `@${EMAIL_DOMAIN.toLowerCase()}`;
-
-    // Find the first address that matches our domain
-    const targetEmail = toAddresses.find((addr) => addr.endsWith(domainSuffix));
-
-    if (!targetEmail) {
-      // Not sent to our domain at all
+    // Phase 1: Process intake emails FIRST (creates properties)
+    for (const { email, targetEmail } of intakeEmails) {
+      await processEmail(
+        resend,
+        email,
+        targetEmail,
+        true,
+        store,
+        docStore,
+        inboxStore,
+      );
       await markEmailProcessed(email.id);
-      continue;
     }
 
-    // Filter PDF attachments
-    const pdfAttachments = (email.attachments ?? []).filter(
-      (att: { content_type: string }) => att.content_type === "application/pdf",
-    );
-
-    if (pdfAttachments.length === 0) {
+    // Phase 2: Process property-specific emails (adds docs + stores in inbox)
+    for (const { email, targetEmail } of propertyEmails) {
+      await processEmail(
+        resend,
+        email,
+        targetEmail,
+        false,
+        store,
+        docStore,
+        inboxStore,
+      );
       await markEmailProcessed(email.id);
-      continue;
-    }
-
-    // Categorize by recipient
-    const isIntakeEmail = targetEmail === INTAKE_ADDRESS.toLowerCase();
-    if (isIntakeEmail) {
-      intakeEmails.push({ email, targetEmail });
-    } else {
-      propertyEmails.push({ email, targetEmail });
     }
   }
 
-  // Phase 1: Process intake emails FIRST (creates properties)
-  for (const { email, targetEmail } of intakeEmails) {
-    await processEmail(resend, email, targetEmail, true, store, docStore);
-    await markEmailProcessed(email.id);
-  }
+  // -----------------------------------------------------------------------
+  // Phase B: Poll SENT emails (capture outbound messages)
+  // -----------------------------------------------------------------------
+  try {
+    const { data: sentData, error: sentError } = await resend.emails.list();
 
-  // Phase 2: Process property-specific emails (adds docs to existing properties)
-  for (const { email, targetEmail } of propertyEmails) {
-    await processEmail(resend, email, targetEmail, false, store, docStore);
-    await markEmailProcessed(email.id);
+    if (sentError) {
+      log(`sent poll error: ${sentError.message}`);
+      return;
+    }
+
+    if (!sentData || !sentData.data || sentData.data.length === 0) {
+      return;
+    }
+
+    for (const sentEmail of sentData.data) {
+      // Skip if already processed
+      if (await isEmailProcessed(`sent_${sentEmail.id}`)) {
+        continue;
+      }
+
+      // Check if the sender is one of our property emails
+      const fromStr = (sentEmail as any).from || "";
+      const fromEmail = fromStr.includes("<")
+        ? fromStr.match(/<(.+)>/)?.[1] || fromStr
+        : fromStr;
+
+      const domainSuffix = `@${EMAIL_DOMAIN.toLowerCase()}`;
+      if (!fromEmail.toLowerCase().endsWith(domainSuffix)) {
+        await markEmailProcessed(`sent_${sentEmail.id}`);
+        continue;
+      }
+
+      // Skip intake@ address
+      if (fromEmail.toLowerCase() === INTAKE_ADDRESS.toLowerCase()) {
+        await markEmailProcessed(`sent_${sentEmail.id}`);
+        continue;
+      }
+
+      // Find the property by sender email
+      const property = await store.findByPropertyEmail(fromEmail.toLowerCase());
+      if (!property) {
+        await markEmailProcessed(`sent_${sentEmail.id}`);
+        continue;
+      }
+
+      // Skip if already in inbox (could have been stored on send)
+      if (await inboxStore.existsByResendId(sentEmail.id)) {
+        await markEmailProcessed(`sent_${sentEmail.id}`);
+        continue;
+      }
+
+      // Fetch full sent email to get body
+      try {
+        const { data: fullSent, error: fullSentError } =
+          await resend.emails.get(sentEmail.id);
+
+        if (fullSentError || !fullSent) {
+          await markEmailProcessed(`sent_${sentEmail.id}`);
+          continue;
+        }
+
+        const full = fullSent as any;
+        const toArr = (Array.isArray(full.to) ? full.to : [full.to])
+          .filter(Boolean)
+          .map((addr: string) => ({ email: addr, name: null }));
+        const ccArr = (full.cc ?? []).map((addr: string) => ({
+          email: addr,
+          name: null,
+        }));
+
+        await inboxStore.createMessage({
+          resendEmailId: sentEmail.id,
+          propertyId: property.id,
+          direction: "outbound",
+          fromEmail: fromEmail.toLowerCase(),
+          fromName: null,
+          to: toArr,
+          cc: ccArr,
+          subject: full.subject || "(no subject)",
+          bodyText: full.text || null,
+          bodyHtml: full.html || null,
+          messageId: full.message_id || null,
+          inReplyTo: full.headers?.["in-reply-to"] || null,
+          references: full.headers?.references
+            ? full.headers.references.split(/\s+/).filter(Boolean)
+            : [],
+          hasAttachments: false, // Resend list doesn't expose attachments easily
+          sentAt:
+            full.created_at ||
+            (sentEmail as any).created_at ||
+            new Date().toISOString(),
+        });
+
+        log(
+          `📤 inbox stored sent: "${full.subject}" from ${property.property_name}`,
+        );
+      } catch (err) {
+        log(
+          `sent fetch error: ${err instanceof Error ? err.message : String(err)}`,
+        );
+      }
+
+      await markEmailProcessed(`sent_${sentEmail.id}`);
+    }
+  } catch (err) {
+    log(`sent poll error: ${err instanceof Error ? err.message : String(err)}`);
   }
 }
 
@@ -363,6 +575,7 @@ let pollTimer: ReturnType<typeof setInterval> | null = null;
 export function startEmailPolling(
   store: PropertyStore,
   docStore: DocumentStore,
+  inboxStore: InboxStore,
 ): void {
   const apiKey = process.env.RESEND_API_KEY;
 
@@ -378,12 +591,12 @@ export function startEmailPolling(
   );
 
   // Run immediately, then on interval
-  pollOnce(resend, store, docStore).catch((err) =>
+  pollOnce(resend, store, docStore, inboxStore).catch((err) =>
     log(`poll error: ${err instanceof Error ? err.message : String(err)}`),
   );
 
   pollTimer = setInterval(() => {
-    pollOnce(resend, store, docStore).catch((err) =>
+    pollOnce(resend, store, docStore, inboxStore).catch((err) =>
       log(`poll error: ${err instanceof Error ? err.message : String(err)}`),
     );
   }, POLL_INTERVAL_MS);

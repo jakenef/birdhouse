@@ -10,12 +10,14 @@ import { createContactsRouter } from "./routes/contacts";
 import { GoogleStreetViewService } from "./services/googleStreetView";
 import { DrizzlePropertyStore } from "./services/drizzlePropertyStore";
 import { DocumentStore } from "./services/documentStore";
+import { InboxStore } from "./services/inboxStore";
 import { startEmailPolling } from "./services/emailIntake";
 
 const app = express();
 const port = Number(process.env.PORT || "3001");
 const propertyStore = new DrizzlePropertyStore();
 const documentStore = new DocumentStore();
+const inboxStore = new InboxStore();
 const streetViewService = new GoogleStreetViewService();
 
 app.use(cors());
@@ -32,7 +34,12 @@ app.get("/health", (_req: Request, res: Response) => {
 app.use("/api", parseRouter);
 app.use(
   "/api",
-  createPropertiesRouter(propertyStore, streetViewService, documentStore),
+  createPropertiesRouter(
+    propertyStore,
+    streetViewService,
+    documentStore,
+    inboxStore,
+  ),
 );
 app.use("/api", createContactsRouter());
 
@@ -58,7 +65,7 @@ app.use((error: unknown, _req: Request, res: Response, _next: NextFunction) => {
 
 app.listen(port, () => {
   // Start email intake polling
-  startEmailPolling(propertyStore, documentStore);
+  startEmailPolling(propertyStore, documentStore, inboxStore);
 
   console.log(
     JSON.stringify({
