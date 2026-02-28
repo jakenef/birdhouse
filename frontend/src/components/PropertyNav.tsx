@@ -1,7 +1,7 @@
-import { FileText, MessageSquareText, Workflow } from "lucide-react";
+import { FileText, Inbox, Workflow } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
-export type PropertyTab = "pipeline" | "messages" | "documents";
+export type PropertyTab = "pipeline" | "inbox" | "documents";
 
 interface PropertyNavProps {
   activeTab: PropertyTab;
@@ -10,7 +10,7 @@ interface PropertyNavProps {
 
 const tabs: Array<{ id: PropertyTab; label: string; icon: LucideIcon }> = [
   { id: "pipeline", label: "Pipeline", icon: Workflow },
-  { id: "messages", label: "Messages", icon: MessageSquareText },
+  { id: "inbox", label: "Inbox", icon: Inbox },
   { id: "documents", label: "Documents", icon: FileText },
 ];
 
