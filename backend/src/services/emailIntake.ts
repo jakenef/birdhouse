@@ -17,8 +17,8 @@ import { processedEmails } from "../db/schema";
 // Config
 // ---------------------------------------------------------------------------
 
-const INTAKE_ADDRESS =
-  process.env.INTAKE_EMAIL || "intake@bronaaelda.resend.app";
+const EMAIL_DOMAIN = process.env.EMAIL_DOMAIN || "bronaaelda.resend.app";
+const INTAKE_ADDRESS = `intake@${EMAIL_DOMAIN}`;
 const POLL_INTERVAL_MS = Number(process.env.EMAIL_POLL_INTERVAL_MS || "30000");
 const ATTACHMENTS_DIR = path.resolve(process.cwd(), "data", "intake-pdfs");
 const REQUEST_TIMEOUT_MS = Number(process.env.REQUEST_TIMEOUT_MS || "60000");
@@ -92,6 +92,196 @@ function canParse(): boolean {
 // Core polling logic
 // ---------------------------------------------------------------------------
 
+/**
+ * Process an email sent to the intake address (creates NEW property).
+ * Runs full DocAI + OpenAI parsing pipeline.
+ */
+async function processIntakeEmail(
+  email: any,
+  att: any,
+  pdfBuffer: Buffer,
+  savedFilename: string,
+  docHash: string,
+  store: PropertyStore,
+  docStore: DocumentStore,
+): Promise<void> {
+  // Check for duplicate PDF by hash before calling APIs
+  const existing = await store.findByDocHash(docHash);
+  if (existing) {
+    log(`skip duplicate PDF (${existing.id})`);
+    return;
+  }
+
+  // Parse pipeline
+  if (!canParse()) {
+    log("skip — parse env vars not configured");
+    return;
+  }
+
+  const docAiPayload = await extractContractFieldsFromDocAi({
+    buffer: pdfBuffer,
+    bytes: pdfBuffer.length,
+    docHash,
+    filename: savedFilename,
+    mimeType: "application/pdf",
+    timeoutMs: REQUEST_TIMEOUT_MS,
+  });
+
+  const parsedContract = await parsePurchaseContractWithOpenAi({
+    docAiPayload,
+    fileBuffer: pdfBuffer,
+    filename: savedFilename,
+    mimeType: "application/pdf",
+    timeoutMs: REQUEST_TIMEOUT_MS,
+  });
+
+  const record = await store.create(parsedContract);
+
+  // Store a document record linking the PDF to this property
+  await docStore.create({
+    propertyId: record.id,
+    filename: att.filename || "attachment.pdf",
+    filePath: `data/intake-pdfs/${savedFilename}`,
+    mimeType: "application/pdf",
+    sizeBytes: pdfBuffer.length,
+    docHash,
+    source: "email_intake",
+  });
+
+  const c = parsedContract;
+
+  log(
+    `✅ ${record.property_name} | $${(c.money.purchase_price ?? 0).toLocaleString()} | ` +
+      `${c.parties.buyers.join(", ")} ← ${c.parties.sellers.join(", ")} | ` +
+      `closing ${c.key_dates.settlement_deadline ?? "TBD"}`,
+  );
+}
+
+/**
+ * Process an email sent to a property-specific address (adds document to EXISTING property).
+ * Skips parsing pipeline — just saves PDF and creates document record.
+ */
+async function processPropertyEmail(
+  propertyEmail: string,
+  att: any,
+  pdfBuffer: Buffer,
+  savedFilename: string,
+  docHash: string,
+  store: PropertyStore,
+  docStore: DocumentStore,
+): Promise<void> {
+  // Find the property by its email address
+  const property = await store.findByPropertyEmail(propertyEmail);
+
+  if (!property) {
+    log(`skip — no property found for ${propertyEmail}`);
+    return;
+  }
+
+  // Create document record (allow multiple docs with same hash for same property)
+  await docStore.create({
+    propertyId: property.id,
+    filename: att.filename || "attachment.pdf",
+    filePath: `data/intake-pdfs/${savedFilename}`,
+    mimeType: "application/pdf",
+    sizeBytes: pdfBuffer.length,
+    docHash,
+    source: "email_intake",
+  });
+
+  log(
+    `📎 added doc to ${property.property_name} (${att.filename || "attachment.pdf"})`,
+  );
+}
+
+/**
+ * Process a single email with all its PDF attachments.
+ */
+async function processEmail(
+  resend: Resend,
+  email: any,
+  targetEmail: string,
+  isIntakeEmail: boolean,
+  store: PropertyStore,
+  docStore: DocumentStore,
+): Promise<void> {
+  const pdfAttachments = (email.attachments ?? []).filter(
+    (att: { content_type: string }) => att.content_type === "application/pdf",
+  );
+
+  if (pdfAttachments.length === 0) {
+    return;
+  }
+
+  log(
+    `📬 email from ${email.from} → ${targetEmail} — "${email.subject}" (${pdfAttachments.length} PDF${pdfAttachments.length > 1 ? "s" : ""})`,
+  );
+
+  for (const att of pdfAttachments) {
+    try {
+      // Download attachment
+      const { data: attData, error: attError } =
+        await resend.emails.receiving.attachments.get({
+          id: att.id,
+          emailId: email.id,
+        });
+
+      if (attError || !attData) {
+        log(
+          `error downloading attachment: ${attError?.message ?? "No data returned"}`,
+        );
+        continue;
+      }
+
+      const downloadUrl = (attData as { download_url?: string }).download_url;
+      if (!downloadUrl) continue;
+
+      const pdfBuffer = await downloadBuffer(downloadUrl);
+
+      // Save to disk (for both intake and property-specific emails)
+      await fs.mkdir(ATTACHMENTS_DIR, { recursive: true });
+      const safeFilename = (att.filename || "attachment.pdf").replace(
+        /[^a-zA-Z0-9._-]/g,
+        "_",
+      );
+      const savedFilename = `${email.id}_${safeFilename}`;
+      const savedPath = path.join(ATTACHMENTS_DIR, savedFilename);
+      await fs.writeFile(savedPath, pdfBuffer);
+
+      const docHash = sha256(pdfBuffer);
+
+      // Route to appropriate handler
+      if (isIntakeEmail) {
+        await processIntakeEmail(
+          email,
+          att,
+          pdfBuffer,
+          savedFilename,
+          docHash,
+          store,
+          docStore,
+        );
+      } else {
+        await processPropertyEmail(
+          targetEmail,
+          att,
+          pdfBuffer,
+          savedFilename,
+          docHash,
+          store,
+          docStore,
+        );
+      }
+    } catch (err) {
+      if (err instanceof DuplicatePropertyError) {
+        log("skip duplicate");
+      } else {
+        log(`error: ${err instanceof Error ? err.message : String(err)}`);
+      }
+    }
+  }
+}
+
 async function pollOnce(
   resend: Resend,
   store: PropertyStore,
@@ -109,15 +299,25 @@ async function pollOnce(
     return;
   }
 
+  // Categorize emails: intake (creates properties) vs property-specific (adds docs)
+  const intakeEmails: Array<{ email: any; targetEmail: string }> = [];
+  const propertyEmails: Array<{ email: any; targetEmail: string }> = [];
+
   for (const email of listData.data) {
     // Skip already-processed (DB lookup — survives restarts)
     if (await isEmailProcessed(email.id)) {
       continue;
     }
 
-    // Check if sent to the intake address
+    // Determine recipient email routing
     const toAddresses = (email.to ?? []).map((a: string) => a.toLowerCase());
-    if (!toAddresses.includes(INTAKE_ADDRESS.toLowerCase())) {
+    const domainSuffix = `@${EMAIL_DOMAIN.toLowerCase()}`;
+
+    // Find the first address that matches our domain
+    const targetEmail = toAddresses.find((addr) => addr.endsWith(domainSuffix));
+
+    if (!targetEmail) {
+      // Not sent to our domain at all
       await markEmailProcessed(email.id);
       continue;
     }
@@ -132,101 +332,24 @@ async function pollOnce(
       continue;
     }
 
-    log(
-      `📬 email from ${email.from} — "${email.subject}" (${pdfAttachments.length} PDF${pdfAttachments.length > 1 ? "s" : ""})`,
-    );
-
-    for (const att of pdfAttachments) {
-      try {
-        // Download attachment
-        const { data: attData, error: attError } =
-          await resend.emails.receiving.attachments.get({
-            id: att.id,
-            emailId: email.id,
-          });
-
-        if (attError || !attData) {
-          log(
-            `error downloading attachment: ${attError?.message ?? "No data returned"}`,
-          );
-          continue;
-        }
-
-        const downloadUrl = (attData as { download_url?: string }).download_url;
-        if (!downloadUrl) continue;
-
-        const pdfBuffer = await downloadBuffer(downloadUrl);
-
-        // Save to disk (fallback for manual retries)
-        await fs.mkdir(ATTACHMENTS_DIR, { recursive: true });
-        const safeFilename = (att.filename || "attachment.pdf").replace(
-          /[^a-zA-Z0-9._-]/g,
-          "_",
-        );
-        const savedFilename = `${email.id}_${safeFilename}`;
-        const savedPath = path.join(ATTACHMENTS_DIR, savedFilename);
-        await fs.writeFile(savedPath, pdfBuffer);
-
-        // Check for duplicate PDF by hash before calling APIs
-        const docHash = sha256(pdfBuffer);
-        const existing = await store.findByDocHash(docHash);
-        if (existing) {
-          log(`skip duplicate PDF (${existing.id})`);
-          continue;
-        }
-
-        // Parse pipeline
-        if (!canParse()) {
-          log("skip — parse env vars not configured");
-          continue;
-        }
-
-        const docAiPayload = await extractContractFieldsFromDocAi({
-          buffer: pdfBuffer,
-          bytes: pdfBuffer.length,
-          docHash,
-          filename: savedFilename,
-          mimeType: "application/pdf",
-          timeoutMs: REQUEST_TIMEOUT_MS,
-        });
-
-        const parsedContract = await parsePurchaseContractWithOpenAi({
-          docAiPayload,
-          fileBuffer: pdfBuffer,
-          filename: savedFilename,
-          mimeType: "application/pdf",
-          timeoutMs: REQUEST_TIMEOUT_MS,
-        });
-
-        const record = await store.create(parsedContract);
-
-        // Store a document record linking the PDF to this property
-        await docStore.create({
-          propertyId: record.id,
-          filename: att.filename || "attachment.pdf",
-          filePath: `data/intake-pdfs/${savedFilename}`,
-          mimeType: "application/pdf",
-          sizeBytes: pdfBuffer.length,
-          docHash,
-          source: "email_intake",
-        });
-
-        const c = parsedContract;
-
-        log(
-          `✅ ${record.property_name} | $${(c.money.purchase_price ?? 0).toLocaleString()} | ` +
-            `${c.parties.buyers.join(", ")} ← ${c.parties.sellers.join(", ")} | ` +
-            `closing ${c.key_dates.settlement_deadline ?? "TBD"}`,
-        );
-      } catch (err) {
-        if (err instanceof DuplicatePropertyError) {
-          log("skip duplicate");
-        } else {
-          log(`error: ${err instanceof Error ? err.message : String(err)}`);
-        }
-      }
+    // Categorize by recipient
+    const isIntakeEmail = targetEmail === INTAKE_ADDRESS.toLowerCase();
+    if (isIntakeEmail) {
+      intakeEmails.push({ email, targetEmail });
+    } else {
+      propertyEmails.push({ email, targetEmail });
     }
+  }
 
+  // Phase 1: Process intake emails FIRST (creates properties)
+  for (const { email, targetEmail } of intakeEmails) {
+    await processEmail(resend, email, targetEmail, true, store, docStore);
+    await markEmailProcessed(email.id);
+  }
+
+  // Phase 2: Process property-specific emails (adds docs to existing properties)
+  for (const { email, targetEmail } of propertyEmails) {
+    await processEmail(resend, email, targetEmail, false, store, docStore);
     await markEmailProcessed(email.id);
   }
 }

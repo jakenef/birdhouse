@@ -7,6 +7,7 @@ import { ParsedPurchaseContract } from "../schemas/parsedPurchaseContract.schema
 import { DuplicatePropertyError, PropertyStore } from "./propertyStore";
 import { StoredPropertyRecord, StreetViewCacheEntry } from "../types/property";
 import { derivePropertyName } from "../utils/propertyName";
+import { buildPropertyEmail, generateEmailSlug } from "../utils/emailSlug";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -23,6 +24,7 @@ function generatePropertyId(): string {
 function contractToRow(
   id: string,
   propertyName: string,
+  propertyEmail: string,
   contract: ParsedPurchaseContract,
   now: string,
 ): NewProperty {
@@ -33,6 +35,7 @@ function contractToRow(
 
     docHash: contract.metadata.doc_hash,
     propertyName,
+    propertyEmail,
     parsedContractJson: JSON.stringify(contract),
 
     address: contract.property.address_full ?? "Unknown",
@@ -72,6 +75,7 @@ function rowToStoredRecord(
   return {
     id: row.id,
     property_name: row.propertyName ?? row.address,
+    property_email: row.propertyEmail,
     created_at_iso: row.createdAt,
     updated_at_iso: row.updatedAt,
     parsed_contract: contract,
@@ -86,6 +90,29 @@ function rowToStoredRecord(
 // ---------------------------------------------------------------------------
 
 export class DrizzlePropertyStore implements PropertyStore {
+  /**
+   * Generate a unique property email by appending numeric suffixes if collisions occur.
+   * Examples:
+   *   "6119 W Montauk Ln" -> "6119-w-montauk-ln@domain"
+   *   If collision -> "6119-w-montauk-ln-2@domain"
+   */
+  private async generateUniquePropertyEmail(
+    address: string | null | undefined,
+  ): Promise<string> {
+    const domain = process.env.EMAIL_DOMAIN || "bronaaelda.resend.app";
+    const baseSlug = generateEmailSlug(address);
+    let candidate = `${baseSlug}@${domain}`;
+    let suffix = 2;
+
+    // Check for collisions and increment suffix until unique
+    while (await this.findByPropertyEmail(candidate)) {
+      candidate = `${baseSlug}-${suffix}@${domain}`;
+      suffix++;
+    }
+
+    return candidate;
+  }
+
   async list(): Promise<StoredPropertyRecord[]> {
     const rows = await db.select().from(properties).all();
     return rows.map(rowToStoredRecord).reverse();
@@ -106,14 +133,24 @@ export class DrizzlePropertyStore implements PropertyStore {
 
     const id = generatePropertyId();
     const propertyName = derivePropertyName(parsedContract);
+    const propertyEmail = await this.generateUniquePropertyEmail(
+      parsedContract.property.address_full,
+    );
     const now = new Date().toISOString();
-    const row = contractToRow(id, propertyName, parsedContract, now);
+    const row = contractToRow(
+      id,
+      propertyName,
+      propertyEmail,
+      parsedContract,
+      now,
+    );
 
     await db.insert(properties).values(row);
 
     return {
       id,
       property_name: propertyName,
+      property_email: propertyEmail,
       created_at_iso: now,
       updated_at_iso: now,
       parsed_contract: parsedContract,
@@ -136,6 +173,19 @@ export class DrizzlePropertyStore implements PropertyStore {
       .select()
       .from(properties)
       .where(eq(properties.id, id))
+      .limit(1);
+
+    if (rows.length === 0) return null;
+    return rowToStoredRecord(rows[0]);
+  }
+
+  async findByPropertyEmail(
+    email: string,
+  ): Promise<StoredPropertyRecord | null> {
+    const rows = await db
+      .select()
+      .from(properties)
+      .where(eq(properties.propertyEmail, email))
       .limit(1);
 
     if (rows.length === 0) return null;

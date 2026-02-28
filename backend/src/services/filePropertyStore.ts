@@ -14,6 +14,7 @@ import {
   StreetViewCacheEntry,
 } from "../types/property";
 import { derivePropertyName } from "../utils/propertyName";
+import { buildPropertyEmail } from "../utils/emailSlug";
 
 const EMPTY_DATABASE: MockPropertiesFile = {
   properties: [],
@@ -36,11 +37,14 @@ function isStoredPropertyRecord(value: unknown): value is StoredPropertyRecord {
     typeof record.updated_at_iso === "string" &&
     typeof record.parsed_contract === "object" &&
     record.parsed_contract !== null &&
-    (record.street_view === undefined || isStreetViewCacheEntry(record.street_view))
+    (record.street_view === undefined ||
+      isStreetViewCacheEntry(record.street_view))
   );
 }
 
-function isStreetViewStatus(value: unknown): value is StreetViewCacheEntry["status"] {
+function isStreetViewStatus(
+  value: unknown,
+): value is StreetViewCacheEntry["status"] {
   return value === "available" || value === "unavailable" || value === "error";
 }
 
@@ -53,7 +57,8 @@ function isStreetViewCacheEntry(value: unknown): value is StreetViewCacheEntry {
   return (
     isStreetViewStatus(entry.status) &&
     typeof entry.last_checked_at_iso === "string" &&
-    (entry.source_address === null || typeof entry.source_address === "string") &&
+    (entry.source_address === null ||
+      typeof entry.source_address === "string") &&
     (entry.resolved_address === null ||
       typeof entry.resolved_address === "string") &&
     (entry.latitude === null || typeof entry.latitude === "number") &&
@@ -98,7 +103,8 @@ export class FilePropertyStore implements PropertyStore {
     const database = await this.readDatabase();
     const existing = database.properties.find(
       (record) =>
-        record.parsed_contract.metadata.doc_hash === parsedContract.metadata.doc_hash,
+        record.parsed_contract.metadata.doc_hash ===
+        parsedContract.metadata.doc_hash,
     );
 
     if (existing) {
@@ -108,9 +114,14 @@ export class FilePropertyStore implements PropertyStore {
     }
 
     const timestamp = new Date().toISOString();
+    const domain = process.env.EMAIL_DOMAIN || "bronaaelda.resend.app";
     const record: StoredPropertyRecord = {
       id: generatePropertyId(),
       property_name: derivePropertyName(parsedContract),
+      property_email: buildPropertyEmail(
+        parsedContract.property.address_full,
+        domain,
+      ),
       created_at_iso: timestamp,
       updated_at_iso: timestamp,
       parsed_contract: parsedContract,
@@ -134,6 +145,16 @@ export class FilePropertyStore implements PropertyStore {
   async findById(id: string): Promise<StoredPropertyRecord | null> {
     const database = await this.readDatabase();
     return database.properties.find((record) => record.id === id) || null;
+  }
+
+  async findByPropertyEmail(
+    email: string,
+  ): Promise<StoredPropertyRecord | null> {
+    const database = await this.readDatabase();
+    return (
+      database.properties.find((record) => record.property_email === email) ||
+      null
+    );
   }
 
   async updateStreetView(
@@ -192,7 +213,9 @@ export class FilePropertyStore implements PropertyStore {
     try {
       parsed = JSON.parse(raw);
     } catch {
-      throw new PropertyStoreError("Property store file contains invalid JSON.");
+      throw new PropertyStoreError(
+        "Property store file contains invalid JSON.",
+      );
     }
 
     if (!isMockPropertiesFile(parsed)) {
@@ -204,7 +227,11 @@ export class FilePropertyStore implements PropertyStore {
 
   private async writeDatabase(database: MockPropertiesFile): Promise<void> {
     try {
-      await fs.writeFile(this.filePath, JSON.stringify(database, null, 2), "utf8");
+      await fs.writeFile(
+        this.filePath,
+        JSON.stringify(database, null, 2),
+        "utf8",
+      );
     } catch (error) {
       throw new PropertyStoreError(
         error instanceof Error

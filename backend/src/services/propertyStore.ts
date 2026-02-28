@@ -6,6 +6,7 @@ export interface PropertyStore {
   create(parsedContract: ParsedPurchaseContract): Promise<StoredPropertyRecord>;
   findByDocHash(docHash: string): Promise<StoredPropertyRecord | null>;
   findById(id: string): Promise<StoredPropertyRecord | null>;
+  findByPropertyEmail(email: string): Promise<StoredPropertyRecord | null>;
   updateStreetView(
     id: string,
     streetView: StreetViewCacheEntry,

@@ -1,12 +1,15 @@
 import { PropertyCardDto, StoredPropertyRecord } from "../types/property";
 
-export function toPropertyCardDto(record: StoredPropertyRecord): PropertyCardDto {
+export function toPropertyCardDto(
+  record: StoredPropertyRecord,
+): PropertyCardDto {
   const contract = record.parsed_contract;
   const streetView = record.street_view;
 
   return {
     id: record.id,
     property_name: record.property_name,
+    property_email: record.property_email,
     doc_hash: contract.metadata.doc_hash,
     address_full: contract.property.address_full,
     city: contract.property.city,

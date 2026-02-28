@@ -53,7 +53,7 @@ export const properties = sqliteTable("properties", {
   // "active" | "closed" | "archived" | "cancelled"
 
   // Unique property email for inbound docs
-  propertyEmail: text("property_email"),
+  propertyEmail: text("property_email").unique(),
 
   // Settlement totals (populated later from ALTA upload)
   brokerCommission: real("broker_commission"),

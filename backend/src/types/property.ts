@@ -19,6 +19,7 @@ export type StreetViewCacheEntry = {
 export type StoredPropertyRecord = {
   id: string;
   property_name: string;
+  property_email: string | null;
   created_at_iso: string;
   updated_at_iso: string;
   parsed_contract: ParsedPurchaseContract;
@@ -28,6 +29,7 @@ export type StoredPropertyRecord = {
 export type PropertyCardDto = {
   id: string;
   property_name: string;
+  property_email: string | null;
   doc_hash: string;
   address_full: string | null;
   city: string | null;
