@@ -4,6 +4,9 @@ package-lock.json
 yarn.lock
 pnpm-lock.yaml
 
+# Database
+*.db
+
 # Build outputs
 dist/
 build/
