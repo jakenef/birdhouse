@@ -26,8 +26,8 @@ const REQUEST_TIMEOUT_MS = Number(process.env.REQUEST_TIMEOUT_MS || "60000");
 // Helpers
 // ---------------------------------------------------------------------------
 
-function log(event: string, data: Record<string, unknown> = {}) {
-  console.log(JSON.stringify({ event, ...data, ts: new Date().toISOString() }));
+function log(msg: string) {
+  console.log(`[intake] ${msg}`);
 }
 
 function downloadBuffer(url: string): Promise<Buffer> {
@@ -96,7 +96,7 @@ async function pollOnce(resend: Resend, store: PropertyStore): Promise<void> {
     await resend.emails.receiving.list();
 
   if (listError) {
-    log("poll_error", { message: listError.message });
+    log(`poll error: ${listError.message}`);
     return;
   }
 
@@ -123,17 +123,13 @@ async function pollOnce(resend: Resend, store: PropertyStore): Promise<void> {
     );
 
     if (pdfAttachments.length === 0) {
-      log("intake_skip", { email_id: email.id, reason: "no PDF attachments" });
       await markEmailProcessed(email.id);
       continue;
     }
 
-    log("intake_email", {
-      email_id: email.id,
-      from: email.from,
-      subject: email.subject,
-      pdfs: pdfAttachments.length,
-    });
+    log(
+      `📬 email from ${email.from} — "${email.subject}" (${pdfAttachments.length} PDF${pdfAttachments.length > 1 ? "s" : ""})`,
+    );
 
     for (const att of pdfAttachments) {
       try {
@@ -145,11 +141,9 @@ async function pollOnce(resend: Resend, store: PropertyStore): Promise<void> {
           });
 
         if (attError || !attData) {
-          log("intake_error", {
-            email_id: email.id,
-            step: "attachment_download",
-            message: attError?.message ?? "No data returned",
-          });
+          log(
+            `error downloading attachment: ${attError?.message ?? "No data returned"}`,
+          );
           continue;
         }
 
@@ -172,21 +166,13 @@ async function pollOnce(resend: Resend, store: PropertyStore): Promise<void> {
         const docHash = sha256(pdfBuffer);
         const existing = await store.findByDocHash(docHash);
         if (existing) {
-          log("intake_skip", {
-            email_id: email.id,
-            reason: "duplicate PDF",
-            doc_hash: docHash,
-            existing_id: existing.id,
-          });
+          log(`skip duplicate PDF (${existing.id})`);
           continue;
         }
 
         // Parse pipeline
         if (!canParse()) {
-          log("intake_skip", {
-            email_id: email.id,
-            reason: "parse env vars not configured",
-          });
+          log("skip — parse env vars not configured");
           continue;
         }
 
@@ -208,23 +194,18 @@ async function pollOnce(resend: Resend, store: PropertyStore): Promise<void> {
         });
 
         const record = await store.create(parsedContract);
+        const c = parsedContract;
 
-        log("intake_property_created", {
-          id: record.id,
-          name: record.property_name,
-          price: parsedContract.money.purchase_price,
-          buyer: parsedContract.parties.buyers.join(", "),
-          seller: parsedContract.parties.sellers.join(", "),
-          closing: parsedContract.key_dates.settlement_deadline,
-        });
+        log(
+          `✅ ${record.property_name} | $${(c.money.purchase_price ?? 0).toLocaleString()} | ` +
+            `${c.parties.buyers.join(", ")} ← ${c.parties.sellers.join(", ")} | ` +
+            `closing ${c.key_dates.settlement_deadline ?? "TBD"}`,
+        );
       } catch (err) {
         if (err instanceof DuplicatePropertyError) {
-          log("intake_skip", { email_id: email.id, reason: "duplicate" });
+          log("skip duplicate");
         } else {
-          log("intake_error", {
-            email_id: email.id,
-            message: err instanceof Error ? err.message : String(err),
-          });
+          log(`error: ${err instanceof Error ? err.message : String(err)}`);
         }
       }
     }
@@ -243,32 +224,24 @@ export function startEmailPolling(store: PropertyStore): void {
   const apiKey = process.env.RESEND_API_KEY;
 
   if (!apiKey || apiKey.trim().length === 0) {
-    log("email_polling_skipped", {
-      message: "RESEND_API_KEY not set — email intake polling is disabled.",
-    });
+    log("disabled — RESEND_API_KEY not set");
     return;
   }
 
   const resend = new Resend(apiKey);
 
-  log("email_polling_started", {
-    intake_address: INTAKE_ADDRESS,
-    poll_interval_ms: POLL_INTERVAL_MS,
-    parse_enabled: canParse(),
-  });
+  log(
+    `polling ${INTAKE_ADDRESS} every ${POLL_INTERVAL_MS / 1000}s (parse: ${canParse() ? "on" : "off"})`,
+  );
 
   // Run immediately, then on interval
   pollOnce(resend, store).catch((err) =>
-    log("poll_error", {
-      message: err instanceof Error ? err.message : String(err),
-    }),
+    log(`poll error: ${err instanceof Error ? err.message : String(err)}`),
   );
 
   pollTimer = setInterval(() => {
     pollOnce(resend, store).catch((err) =>
-      log("poll_error", {
-        message: err instanceof Error ? err.message : String(err),
-      }),
+      log(`poll error: ${err instanceof Error ? err.message : String(err)}`),
     );
   }, POLL_INTERVAL_MS);
 }
@@ -277,6 +250,6 @@ export function stopEmailPolling(): void {
   if (pollTimer) {
     clearInterval(pollTimer);
     pollTimer = null;
-    log("email_polling_stopped", {});
+    log("stopped");
   }
 }
