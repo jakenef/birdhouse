@@ -367,13 +367,13 @@
   color: #344256;
   min-height: 2rem;
   display: grid;
-  grid-template-columns: auto auto minmax(0, 1fr);
+  grid-template-columns: auto auto minmax(0, 1fr) auto;
   align-items: center;
   gap: 0.35rem;
   padding: 0.52rem 0.86rem 0.58rem;
 }
 
-.deal-card__inbox svg {
+.deal-card__inbox > svg {
   width: 0.76rem;
   height: 0.76rem;
   color: #1f4f97;
@@ -395,6 +395,38 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.deal-card__inbox-copy {
+  width: 1.45rem;
+  height: 1.45rem;
+  border-radius: 0.4rem;
+  border: 1px solid #c4d3e8;
+  background: #f8fbff;
+  color: #1f4f97;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  line-height: 0;
+  padding: 0;
+  cursor: pointer;
+}
+
+.deal-card__inbox-copy svg {
+  width: 0.82rem;
+  height: 0.82rem;
+}
+
+.deal-card__inbox-copy.is-copied {
+  border-color: #36a37c;
+  background: #ecfdf5;
+  color: #047857;
+}
+
+.deal-card__inbox-copy:focus-visible {
+  outline: 2px solid #1d4ed8;
+  outline-offset: 1px;
 }
 
 .bottom-nav {
