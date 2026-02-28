@@ -14,15 +14,21 @@
           "page_count": 12,
           "extracted_at_iso": "2026-02-20T14:30:00.000Z",
           "source": "upload",
-          "model": { "openai_model": "gpt-4.1" },
+          "model": {
+            "openai_model": "gpt-4.1"
+          },
           "confidence": {
             "overall": 0.94,
             "notes": "All critical fields extracted."
           }
         },
         "parties": {
-          "buyers": ["Michael & Sarah Chen"],
-          "sellers": ["Robert A. Fitzgerald"]
+          "buyers": [
+            "Michael & Sarah Chen"
+          ],
+          "sellers": [
+            "Robert A. Fitzgerald"
+          ]
         },
         "property": {
           "address_full": "742 Evergreen Terrace",
@@ -45,7 +51,9 @@
         },
         "money": {
           "purchase_price": 425000,
-          "earnest_money": { "amount": 5000 }
+          "earnest_money": {
+            "amount": 5000
+          }
         },
         "obligations_and_risks": {
           "missing_info": [],
@@ -86,9 +94,18 @@
             "Property sold as-is with right to inspect"
           ],
           "numbers_to_know": [
-            { "label": "Purchase Price", "value": "$425,000" },
-            { "label": "Earnest Money", "value": "$5,000" },
-            { "label": "Days to Closing", "value": "47" }
+            {
+              "label": "Purchase Price",
+              "value": "$425,000"
+            },
+            {
+              "label": "Earnest Money",
+              "value": "$5,000"
+            },
+            {
+              "label": "Days to Closing",
+              "value": "47"
+            }
           ],
           "recommended_next_actions": [
             {
@@ -134,15 +151,21 @@
           "page_count": 14,
           "extracted_at_iso": "2026-02-15T10:00:00.000Z",
           "source": "upload",
-          "model": { "openai_model": "gpt-4.1" },
+          "model": {
+            "openai_model": "gpt-4.1"
+          },
           "confidence": {
             "overall": 0.91,
             "notes": "Appraisal deadline inferred from financing section."
           }
         },
         "parties": {
-          "buyers": ["Jessica Thornton"],
-          "sellers": ["David & Maria Lopez"]
+          "buyers": [
+            "Jessica Thornton"
+          ],
+          "sellers": [
+            "David & Maria Lopez"
+          ]
         },
         "property": {
           "address_full": "1847 Pioneer Blvd",
@@ -165,10 +188,14 @@
         },
         "money": {
           "purchase_price": 315000,
-          "earnest_money": { "amount": 3000 }
+          "earnest_money": {
+            "amount": 3000
+          }
         },
         "obligations_and_risks": {
-          "missing_info": ["HOA monthly dues amount not specified in contract"],
+          "missing_info": [
+            "HOA monthly dues amount not specified in contract"
+          ],
           "time_sensitive_items": [
             {
               "label": "Due Diligence Deadline",
@@ -201,9 +228,18 @@
             "Past water damage disclosed by seller"
           ],
           "numbers_to_know": [
-            { "label": "Purchase Price", "value": "$315,000" },
-            { "label": "Earnest Money", "value": "$3,000" },
-            { "label": "Days to Closing", "value": "31" }
+            {
+              "label": "Purchase Price",
+              "value": "$315,000"
+            },
+            {
+              "label": "Earnest Money",
+              "value": "$3,000"
+            },
+            {
+              "label": "Days to Closing",
+              "value": "31"
+            }
           ],
           "recommended_next_actions": [
             {
@@ -244,15 +280,21 @@
           "page_count": 11,
           "extracted_at_iso": "2026-02-25T18:00:00.000Z",
           "source": "upload",
-          "model": { "openai_model": "gpt-4.1" },
+          "model": {
+            "openai_model": "gpt-4.1"
+          },
           "confidence": {
             "overall": 0.97,
             "notes": "High confidence — standard Utah REPC."
           }
         },
         "parties": {
-          "buyers": ["Andrew & Priya Kapoor"],
-          "sellers": ["Bridgewater Homes LLC"]
+          "buyers": [
+            "Andrew & Priya Kapoor"
+          ],
+          "sellers": [
+            "Bridgewater Homes LLC"
+          ]
         },
         "property": {
           "address_full": "3920 Wasatch Hollow Dr",
@@ -275,7 +317,9 @@
         },
         "money": {
           "purchase_price": 550000,
-          "earnest_money": { "amount": 8000 }
+          "earnest_money": {
+            "amount": 8000
+          }
         },
         "obligations_and_risks": {
           "missing_info": [],
@@ -317,9 +361,18 @@
             "Seller is LLC — confirm signing authority"
           ],
           "numbers_to_know": [
-            { "label": "Purchase Price", "value": "$550,000" },
-            { "label": "Earnest Money", "value": "$8,000" },
-            { "label": "Days to Closing", "value": "62" }
+            {
+              "label": "Purchase Price",
+              "value": "$550,000"
+            },
+            {
+              "label": "Earnest Money",
+              "value": "$8,000"
+            },
+            {
+              "label": "Days to Closing",
+              "value": "62"
+            }
           ],
           "recommended_next_actions": [
             {
@@ -346,6 +399,275 @@
               "action": "Confirm certificate of occupancy timeline",
               "owner_role": "agent",
               "due_date": "2026-03-15"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "prop_49020dd280c34bf293e8",
+      "property_name": "0473 Zachary Meadows Apt. 814, Hurricane, UT 84735",
+      "created_at_iso": "2026-02-28T05:57:58.847Z",
+      "updated_at_iso": "2026-02-28T05:57:58.847Z",
+      "parsed_contract": {
+        "metadata": {
+          "doc_hash": "2492c275aa2b936d48e6a54b670b7e6a3e4aca324bb42b82ce5c4a20ef81fdb7",
+          "filename": "7b72fc6d-ef8b-429c-98fd-75829c74e742_UT-DEMO-6FYEJ8V9.pdf",
+          "mime_type": "application/pdf",
+          "bytes": 503803,
+          "page_count": 7,
+          "extracted_at_iso": "2026-02-28T05:57:28.320Z",
+          "source": "upload",
+          "model": {
+            "openai_model": "gpt-4.1"
+          },
+          "confidence": {
+            "overall": 1,
+            "notes": "Key field values for price and earnest money accepted at confidence 1.00 per payload warnings; all extracted fields directly from canonical payload. Auto-accepted purchase_price from PDF review at confidence 1.00. Auto-accepted earnest_money_amount from PDF review at confidence 1.00."
+          }
+        },
+        "parties": {
+          "buyers": [
+            "Justin Duffy"
+          ],
+          "sellers": [
+            "Wall-Howell LLC"
+          ]
+        },
+        "property": {
+          "address_full": "0473 Zachary Meadows Apt. 814, Hurricane, UT 84735",
+          "city": "Hurricane",
+          "state": "UT",
+          "zip": "84735"
+        },
+        "key_dates": {
+          "effective_date": "2026-03-26",
+          "due_diligence_deadline": "2026-04-09",
+          "financing_deadline": "2026-04-26",
+          "appraisal_deadline": "2026-04-26",
+          "seller_disclosure_deadline": "2026-03-29",
+          "settlement_deadline": "2026-05-06",
+          "possession": {
+            "timing": null,
+            "hours_after_recording": null,
+            "days_after_recording": null
+          }
+        },
+        "money": {
+          "purchase_price": 1236020,
+          "earnest_money": {
+            "amount": 28000
+          }
+        },
+        "obligations_and_risks": {
+          "missing_info": [],
+          "time_sensitive_items": [
+            {
+              "label": "Due Diligence Deadline",
+              "due_date": "2026-04-09",
+              "urgency": "medium",
+              "notes": null
+            },
+            {
+              "label": "Financing Deadline",
+              "due_date": "2026-04-26",
+              "urgency": "low",
+              "notes": null
+            },
+            {
+              "label": "Appraisal Deadline",
+              "due_date": "2026-04-26",
+              "urgency": "low",
+              "notes": null
+            },
+            {
+              "label": "Seller Disclosure Deadline",
+              "due_date": "2026-03-29",
+              "urgency": "high",
+              "notes": null
+            },
+            {
+              "label": "Settlement Deadline",
+              "due_date": "2026-05-06",
+              "urgency": "low",
+              "notes": null
+            }
+          ],
+          "warnings": [
+            "Unable to parse numeric value for earnest_money_amount.",
+            "Unable to parse numeric value for purchase_price.",
+            "Both purchase price and earnest money amount appear verbatim and explicitly in form fields and summary. No currency symbols or commas in returned values.",
+            "Auto-accepted purchase_price from PDF review at confidence 1.00.",
+            "Auto-accepted earnest_money_amount from PDF review at confidence 1.00."
+          ]
+        },
+        "summary": {
+          "one_paragraph": "This contract is for the purchase of 0473 Zachary Meadows Apt. 814, Hurricane, UT 84735 by Justin Duffy from Wall-Howell LLC for a total purchase price of $1,236,020. The earnest money deposit is $28,000. Key dates include an effective date of March 26, 2026, a seller disclosure deadline of March 29, 2026, due diligence deadline of April 9, 2026, financing and appraisal deadlines of April 26, 2026, and a settlement deadline of May 6, 2026. Possession timing specifics are not stated in the payload. All critical figures and deadlines are present except for exact possession delivery details.",
+          "bullets": [
+            "Buyer: Justin Duffy; Seller: Wall-Howell LLC.",
+            "Property: 0473 Zachary Meadows Apt. 814, Hurricane, UT 84735.",
+            "Purchase price is $1,236,020.",
+            "Earnest money deposit is $28,000.",
+            "Effective date is March 26, 2026.",
+            "Seller disclosure deadline is March 29, 2026 (high urgency).",
+            "Due diligence deadline is April 9, 2026 (medium urgency).",
+            "Financing and appraisal deadlines are April 26, 2026.",
+            "Settlement (closing) deadline is May 6, 2026.",
+            "Possession timing is not explicitly stated in the canonical payload."
+          ],
+          "numbers_to_know": [
+            {
+              "label": "Purchase Price",
+              "value": "1236020"
+            },
+            {
+              "label": "Earnest Money Deposit",
+              "value": "28000"
+            },
+            {
+              "label": "Due Diligence Deadline",
+              "value": "2026-04-09"
+            },
+            {
+              "label": "Seller Disclosure Deadline",
+              "value": "2026-03-29"
+            },
+            {
+              "label": "Financing Deadline",
+              "value": "2026-04-26"
+            },
+            {
+              "label": "Appraisal Deadline",
+              "value": "2026-04-26"
+            },
+            {
+              "label": "Settlement Deadline",
+              "value": "2026-05-06"
+            }
+          ],
+          "recommended_next_actions": [
+            {
+              "action": "Obtain all required seller disclosures by the deadline.",
+              "owner_role": "buyer",
+              "due_date": "2026-03-29"
+            },
+            {
+              "action": "Complete all due diligence, including inspections and document review, by due diligence deadline.",
+              "owner_role": "buyer",
+              "due_date": "2026-04-09"
+            },
+            {
+              "action": "Submit all loan application documents and coordinate appraisal to meet financing and appraisal deadlines.",
+              "owner_role": "buyer",
+              "due_date": "2026-04-26"
+            },
+            {
+              "action": "Prepare for closing and coordinate with escrow and title for settlement.",
+              "owner_role": "agent",
+              "due_date": "2026-05-06"
+            },
+            {
+              "action": "Clarify and confirm exact possession timing as soon as possible.",
+              "owner_role": "agent",
+              "due_date": null
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "prop_f111d92d104e4e2c9a47",
+      "property_name": "Unnamed Property",
+      "created_at_iso": "2026-02-28T05:58:19.023Z",
+      "updated_at_iso": "2026-02-28T05:58:19.023Z",
+      "parsed_contract": {
+        "metadata": {
+          "doc_hash": "63137e904e12206990df50c5920c4cdc8cfcff06e922e1479f662d49d36269c7",
+          "filename": "103be018-27e1-41d6-99eb-5c1c46ed8892_JacobNefTechResume.pdf",
+          "mime_type": "application/pdf",
+          "bytes": 141630,
+          "page_count": 1,
+          "extracted_at_iso": "2026-02-28T05:58:05.819Z",
+          "source": "upload",
+          "model": {
+            "openai_model": "gpt-4.1"
+          },
+          "confidence": {
+            "overall": 0,
+            "notes": "No contract-related information was detected in the payload or PDF. All critical fields are missing."
+          }
+        },
+        "parties": {
+          "buyers": [],
+          "sellers": []
+        },
+        "property": {
+          "address_full": null,
+          "city": null,
+          "state": null,
+          "zip": null
+        },
+        "key_dates": {
+          "effective_date": null,
+          "due_diligence_deadline": null,
+          "financing_deadline": null,
+          "appraisal_deadline": null,
+          "seller_disclosure_deadline": null,
+          "settlement_deadline": null,
+          "possession": {
+            "timing": null,
+            "hours_after_recording": null,
+            "days_after_recording": null
+          }
+        },
+        "money": {
+          "purchase_price": null,
+          "earnest_money": {
+            "amount": null
+          }
+        },
+        "obligations_and_risks": {
+          "missing_info": [
+            "buyers",
+            "sellers",
+            "property_address",
+            "purchase_price",
+            "settlement_deadline",
+            "earnest_money_amount",
+            "due_diligence_deadline"
+          ],
+          "time_sensitive_items": [],
+          "warnings": [
+            "The provided PDF page shows a resume and does not contain explicit values for purchase price or earnest money amount.",
+            "No real estate transaction figures are visible anywhere on the document.",
+            "All deadline and party/address information is missing and could not be parsed."
+          ]
+        },
+        "summary": {
+          "one_paragraph": "No operational real estate purchase contract information was found in the provided PDF or payload. Essential details such as buyers, sellers, property address, purchase price, earnest money, deadlines, and possession timing are entirely missing. This document appears to be a personal resume and is not a real estate contract.",
+          "bullets": [
+            "No buyer or seller names were identified.",
+            "Property address is missing entirely.",
+            "Purchase price details are absent.",
+            "Settlement and other key deadlines are not present.",
+            "No earnest money amount was found.",
+            "Critical contract dates such as due diligence, financing, and appraisal are missing.",
+            "No possession timing information is available.",
+            "The document is a resume, not a contract.",
+            "No actionable real estate transaction data is present.",
+            "All required fields for a purchase contract are missing."
+          ],
+          "numbers_to_know": [],
+          "recommended_next_actions": [
+            {
+              "action": "Obtain the correct purchase contract document for analysis.",
+              "owner_role": "internal_ops",
+              "due_date": null
+            },
+            {
+              "action": "Request all missing transaction details including parties, property address, price, earnest money, and deadlines.",
+              "owner_role": "agent",
+              "due_date": null
             }
           ]
         }

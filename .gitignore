@@ -4,6 +4,8 @@ package-lock.json
 yarn.lock
 pnpm-lock.yaml
 
+backend/birdhouse-488717-72ce6def9041.json
+
 # Database
 *.db
 

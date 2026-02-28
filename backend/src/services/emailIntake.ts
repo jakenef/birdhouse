@@ -3,6 +3,14 @@ import { promises as fs } from "fs";
 import path from "path";
 import https from "https";
 import http from "http";
+import { eq } from "drizzle-orm";
+
+import { sha256 } from "../utils/hash";
+import { extractContractFieldsFromDocAi } from "./docai";
+import { parsePurchaseContractWithOpenAi } from "./openai";
+import { PropertyStore, DuplicatePropertyError } from "./propertyStore";
+import { db } from "../db";
+import { processedEmails } from "../db/schema";
 
 // ---------------------------------------------------------------------------
 // Config
@@ -12,12 +20,7 @@ const INTAKE_ADDRESS =
   process.env.INTAKE_EMAIL || "intake@bronaaelda.resend.app";
 const POLL_INTERVAL_MS = Number(process.env.EMAIL_POLL_INTERVAL_MS || "30000");
 const ATTACHMENTS_DIR = path.resolve(process.cwd(), "data", "intake-pdfs");
-
-// ---------------------------------------------------------------------------
-// State — tracks emails we've already processed (in-memory for now)
-// ---------------------------------------------------------------------------
-
-const processedEmailIds = new Set<string>();
+const REQUEST_TIMEOUT_MS = Number(process.env.REQUEST_TIMEOUT_MS || "60000");
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -27,9 +30,6 @@ function log(event: string, data: Record<string, unknown> = {}) {
   console.log(JSON.stringify({ event, ...data, ts: new Date().toISOString() }));
 }
 
-/**
- * Download a file from a URL and return the Buffer.
- */
 function downloadBuffer(url: string): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     const mod = url.startsWith("https") ? https : http;
@@ -49,16 +49,54 @@ function downloadBuffer(url: string): Promise<Buffer> {
 }
 
 // ---------------------------------------------------------------------------
+// Processed-email tracking (persisted in SQLite)
+// ---------------------------------------------------------------------------
+
+async function isEmailProcessed(emailId: string): Promise<boolean> {
+  const rows = await db
+    .select()
+    .from(processedEmails)
+    .where(eq(processedEmails.emailId, emailId))
+    .limit(1);
+  return rows.length > 0;
+}
+
+async function markEmailProcessed(emailId: string): Promise<void> {
+  await db
+    .insert(processedEmails)
+    .values({ emailId, processedAt: new Date().toISOString() })
+    .onConflictDoNothing();
+}
+
+// ---------------------------------------------------------------------------
+// Parse env-var check
+// ---------------------------------------------------------------------------
+
+const REQUIRED_PARSE_ENV_VARS = [
+  "GOOGLE_CLOUD_PROJECT_ID",
+  "GOOGLE_CLOUD_LOCATION",
+  "DOCUMENT_AI_PROCESSOR_ID",
+  "GOOGLE_APPLICATION_CREDENTIALS",
+  "OPENAI_API_KEY",
+  "OPENAI_MODEL",
+] as const;
+
+function canParse(): boolean {
+  return REQUIRED_PARSE_ENV_VARS.every(
+    (v) => process.env[v] && process.env[v]!.trim().length > 0,
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Core polling logic
 // ---------------------------------------------------------------------------
 
-async function pollOnce(resend: Resend): Promise<void> {
-  // 1. List recent received emails
+async function pollOnce(resend: Resend, store: PropertyStore): Promise<void> {
   const { data: listData, error: listError } =
     await resend.emails.receiving.list();
 
   if (listError) {
-    log("email_poll_error", { message: listError.message });
+    log("poll_error", { message: listError.message });
     return;
   }
 
@@ -67,48 +105,39 @@ async function pollOnce(resend: Resend): Promise<void> {
   }
 
   for (const email of listData.data) {
-    // 2. Skip already-processed
-    if (processedEmailIds.has(email.id)) {
+    // Skip already-processed (DB lookup — survives restarts)
+    if (await isEmailProcessed(email.id)) {
       continue;
     }
 
-    // 3. Check if sent to the intake address
+    // Check if sent to the intake address
     const toAddresses = (email.to ?? []).map((a: string) => a.toLowerCase());
     if (!toAddresses.includes(INTAKE_ADDRESS.toLowerCase())) {
-      processedEmailIds.add(email.id);
+      await markEmailProcessed(email.id);
       continue;
     }
 
-    // ------------------------------------------------------------------
-    // This is a valid intake email — process it
-    // ------------------------------------------------------------------
-
-    log("intake_email_received", {
-      email_id: email.id,
-      from: email.from,
-      subject: email.subject,
-      to: email.to,
-    });
-
-    // 4. Check for PDF attachments
+    // Filter PDF attachments
     const pdfAttachments = (email.attachments ?? []).filter(
       (att: { content_type: string }) => att.content_type === "application/pdf",
     );
 
     if (pdfAttachments.length === 0) {
-      log("intake_email_no_pdf", {
-        email_id: email.id,
-        message: "Intake email has no PDF attachments — skipping.",
-        attachment_count: (email.attachments ?? []).length,
-      });
-      processedEmailIds.add(email.id);
+      log("intake_skip", { email_id: email.id, reason: "no PDF attachments" });
+      await markEmailProcessed(email.id);
       continue;
     }
 
-    // 5. Download each PDF attachment
+    log("intake_email", {
+      email_id: email.id,
+      from: email.from,
+      subject: email.subject,
+      pdfs: pdfAttachments.length,
+    });
+
     for (const att of pdfAttachments) {
       try {
-        // Get attachment download URL from Resend
+        // Download attachment
         const { data: attData, error: attError } =
           await resend.emails.receiving.attachments.get({
             id: att.id,
@@ -116,26 +145,20 @@ async function pollOnce(resend: Resend): Promise<void> {
           });
 
         if (attError || !attData) {
-          log("intake_attachment_error", {
+          log("intake_error", {
             email_id: email.id,
-            attachment_id: att.id,
-            message: attError?.message ?? "No attachment data returned",
+            step: "attachment_download",
+            message: attError?.message ?? "No data returned",
           });
           continue;
         }
 
         const downloadUrl = (attData as { download_url?: string }).download_url;
-        if (!downloadUrl) {
-          log("intake_attachment_no_url", {
-            email_id: email.id,
-            attachment_id: att.id,
-          });
-          continue;
-        }
+        if (!downloadUrl) continue;
 
         const pdfBuffer = await downloadBuffer(downloadUrl);
 
-        // 6. Save file locally
+        // Save to disk (fallback for manual retries)
         await fs.mkdir(ATTACHMENTS_DIR, { recursive: true });
         const safeFilename = (att.filename || "attachment.pdf").replace(
           /[^a-zA-Z0-9._-]/g,
@@ -145,39 +168,68 @@ async function pollOnce(resend: Resend): Promise<void> {
         const savedPath = path.join(ATTACHMENTS_DIR, savedFilename);
         await fs.writeFile(savedPath, pdfBuffer);
 
-        // ============================================================
-        // 🔔  VISIBLE LOG FOR TESTING
-        // ============================================================
-        console.log("\n" + "=".repeat(70));
-        console.log("📬  NEW INTAKE EMAIL RECEIVED");
-        console.log("=".repeat(70));
-        console.log(`  From:       ${email.from}`);
-        console.log(`  Subject:    ${email.subject}`);
-        console.log(`  To:         ${(email.to ?? []).join(", ")}`);
-        console.log(`  Email ID:   ${email.id}`);
-        console.log(`  Attachment: ${att.filename} (${att.size ?? "?"} bytes)`);
-        console.log(`  Saved to:   ${savedPath}`);
-        console.log("=".repeat(70) + "\n");
+        // Check for duplicate PDF by hash before calling APIs
+        const docHash = sha256(pdfBuffer);
+        const existing = await store.findByDocHash(docHash);
+        if (existing) {
+          log("intake_skip", {
+            email_id: email.id,
+            reason: "duplicate PDF",
+            doc_hash: docHash,
+            existing_id: existing.id,
+          });
+          continue;
+        }
 
-        log("intake_pdf_saved", {
-          email_id: email.id,
-          attachment_id: att.id,
-          filename: att.filename,
-          saved_path: savedPath,
+        // Parse pipeline
+        if (!canParse()) {
+          log("intake_skip", {
+            email_id: email.id,
+            reason: "parse env vars not configured",
+          });
+          continue;
+        }
+
+        const docAiPayload = await extractContractFieldsFromDocAi({
+          buffer: pdfBuffer,
           bytes: pdfBuffer.length,
+          docHash,
+          filename: savedFilename,
+          mimeType: "application/pdf",
+          timeoutMs: REQUEST_TIMEOUT_MS,
         });
 
-        // TODO: Emit IntakeEvent to trigger parse pipeline
-      } catch (err) {
-        log("intake_attachment_download_error", {
-          email_id: email.id,
-          attachment_id: att.id,
-          message: err instanceof Error ? err.message : String(err),
+        const parsedContract = await parsePurchaseContractWithOpenAi({
+          docAiPayload,
+          fileBuffer: pdfBuffer,
+          filename: savedFilename,
+          mimeType: "application/pdf",
+          timeoutMs: REQUEST_TIMEOUT_MS,
         });
+
+        const record = await store.create(parsedContract);
+
+        log("intake_property_created", {
+          id: record.id,
+          name: record.property_name,
+          price: parsedContract.money.purchase_price,
+          buyer: parsedContract.parties.buyers.join(", "),
+          seller: parsedContract.parties.sellers.join(", "),
+          closing: parsedContract.key_dates.settlement_deadline,
+        });
+      } catch (err) {
+        if (err instanceof DuplicatePropertyError) {
+          log("intake_skip", { email_id: email.id, reason: "duplicate" });
+        } else {
+          log("intake_error", {
+            email_id: email.id,
+            message: err instanceof Error ? err.message : String(err),
+          });
+        }
       }
     }
 
-    processedEmailIds.add(email.id);
+    await markEmailProcessed(email.id);
   }
 }
 
@@ -187,7 +239,7 @@ async function pollOnce(resend: Resend): Promise<void> {
 
 let pollTimer: ReturnType<typeof setInterval> | null = null;
 
-export function startEmailPolling(): void {
+export function startEmailPolling(store: PropertyStore): void {
   const apiKey = process.env.RESEND_API_KEY;
 
   if (!apiKey || apiKey.trim().length === 0) {
@@ -202,18 +254,19 @@ export function startEmailPolling(): void {
   log("email_polling_started", {
     intake_address: INTAKE_ADDRESS,
     poll_interval_ms: POLL_INTERVAL_MS,
+    parse_enabled: canParse(),
   });
 
   // Run immediately, then on interval
-  pollOnce(resend).catch((err) =>
-    log("email_poll_error", {
+  pollOnce(resend, store).catch((err) =>
+    log("poll_error", {
       message: err instanceof Error ? err.message : String(err),
     }),
   );
 
   pollTimer = setInterval(() => {
-    pollOnce(resend).catch((err) =>
-      log("email_poll_error", {
+    pollOnce(resend, store).catch((err) =>
+      log("poll_error", {
         message: err instanceof Error ? err.message : String(err),
       }),
     );

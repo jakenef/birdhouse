@@ -5,7 +5,14 @@ export const properties = sqliteTable("properties", {
   createdAt: text("created_at").notNull(),
   updatedAt: text("updated_at").notNull(),
 
-  // Property info
+  // Document identity
+  docHash: text("doc_hash").unique(), // sha256 of the original PDF
+  propertyName: text("property_name"), // derived from address
+
+  // Full parsed contract (JSON blob — single source of truth)
+  parsedContractJson: text("parsed_contract_json"), // JSON string of ParsedPurchaseContract
+
+  // Property info (extracted for querying)
   address: text("address").notNull(),
   city: text("city"),
   state: text("state"),
@@ -67,3 +74,12 @@ export const properties = sqliteTable("properties", {
 
 export type Property = typeof properties.$inferSelect;
 export type NewProperty = typeof properties.$inferInsert;
+
+// ---------------------------------------------------------------------------
+// Processed emails — tracks which Resend email IDs we've already handled
+// ---------------------------------------------------------------------------
+
+export const processedEmails = sqliteTable("processed_emails", {
+  emailId: text("email_id").primaryKey(),
+  processedAt: text("processed_at").notNull(),
+});

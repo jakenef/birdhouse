@@ -6,15 +6,12 @@ import multer from "multer";
 
 import { parseRouter } from "./routes/parse";
 import { createPropertiesRouter } from "./routes/properties";
-import { FilePropertyStore } from "./services/filePropertyStore";
+import { DrizzlePropertyStore } from "./services/drizzlePropertyStore";
 import { startEmailPolling } from "./services/emailIntake";
 
 const app = express();
 const port = Number(process.env.PORT || "3001");
-const propertyStore = new FilePropertyStore(
-  process.env.MOCK_PROPERTIES_DB_PATH ||
-    path.resolve(process.cwd(), "data", "mock-properties.json"),
-);
+const propertyStore = new DrizzlePropertyStore();
 
 app.use(cors());
 app.use(express.json());
@@ -52,7 +49,7 @@ app.use((error: unknown, _req: Request, res: Response, _next: NextFunction) => {
 
 app.listen(port, () => {
   // Start email intake polling
-  startEmailPolling();
+  startEmailPolling(propertyStore);
 
   console.log(
     JSON.stringify({
