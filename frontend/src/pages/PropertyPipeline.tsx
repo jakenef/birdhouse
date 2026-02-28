@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 
+import { PipelinePage } from "../components/pipeline/PipelinePage";
 import { PropertyHeader } from "../components/PropertyHeader";
 import { fetchDealById } from "../services/deals";
 import type { Deal } from "../types/deal";
@@ -22,14 +23,11 @@ export function PropertyPipeline({
   onBackToHome,
 }: PropertyPipelineProps) {
   const [deal, setDeal] = useState<Deal | null>(null);
-  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const loadDeal = async () => {
-      setLoading(true);
       const result = await fetchDealById(propertyId);
       setDeal(result);
-      setLoading(false);
     };
 
     void loadDeal();
@@ -48,16 +46,7 @@ export function PropertyPipeline({
         Back to home
       </button>
 
-      {loading ? (
-        <div className="state-card state-card--loading" role="status" aria-live="polite">
-          Loading property pipeline...
-        </div>
-      ) : (
-        <div className="state-card">
-          <h2>Pipeline</h2>
-          <p>Pipeline timeline and tasks will appear here.</p>
-        </div>
-      )}
+      <PipelinePage propertyId={propertyId} />
     </section>
   );
 }
