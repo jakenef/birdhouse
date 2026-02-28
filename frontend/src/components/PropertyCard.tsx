@@ -1,4 +1,5 @@
 import type { Deal } from "../types/deal";
+import { StatusPill, type StatusPillVariant } from "./StatusPill";
 
 const currencyFormatter = new Intl.NumberFormat("en-US", {
   style: "currency",
@@ -34,29 +35,65 @@ function formatDate(isoDate: string): string {
   return dateFormatter.format(parsed);
 }
 
-function statusToneClass(status: string): string {
+function formatCityState(value: string): string {
+  return value.replace(/\s+\d{5}(?:-\d{4})?$/, "");
+}
+
+function statusVariant(status: string): StatusPillVariant {
   const normalized = status.toLowerCase();
   if (normalized.includes("due diligence")) {
-    return "deal-pill deal-pill--status deal-pill--status-info";
+    return "blue";
   }
 
   if (normalized.includes("closing")) {
-    return "deal-pill deal-pill--status deal-pill--status-purple";
+    return "purple";
   }
 
-  return "deal-pill deal-pill--status deal-pill--status-warning";
+  if (normalized.includes("under contract")) {
+    return "orange";
+  }
+
+  if (normalized.includes("due soon")) {
+    return "orange";
+  }
+
+  if (normalized.includes("completed") || normalized.includes("closed")) {
+    return "green";
+  }
+
+  if (normalized.includes("urgent")) {
+    return "red";
+  }
+
+  return "gray";
 }
 
-function urgencyToneClass(tone: Deal["urgencyTone"]): string {
+function urgencyVariant(
+  tone: Deal["urgencyTone"],
+  label: string,
+): StatusPillVariant {
+  const normalizedLabel = label.toLowerCase();
+  if (normalizedLabel.includes("completed")) {
+    return "green";
+  }
+
+  if (normalizedLabel.includes("urgent")) {
+    return "red";
+  }
+
+  if (normalizedLabel.includes("due soon")) {
+    return "orange";
+  }
+
   if (tone === "critical") {
-    return "deal-pill deal-pill--urgency deal-pill--urgency-critical";
+    return "red";
   }
 
   if (tone === "info") {
-    return "deal-pill deal-pill--urgency deal-pill--urgency-info";
+    return "blue";
   }
 
-  return "deal-pill deal-pill--urgency deal-pill--urgency-warning";
+  return "orange";
 }
 
 export function PropertyCard({ deal, onOpenDeal }: PropertyCardProps) {
@@ -70,17 +107,17 @@ export function PropertyCard({ deal, onOpenDeal }: PropertyCardProps) {
       <div className="deal-card__media" style={{ backgroundImage: `url(${deal.imageUrl})` }}>
         <div className="deal-card__media-overlay" />
         <div className="deal-card__pill-row">
-          <span className={statusToneClass(deal.status)}>{deal.status}</span>
-          <span className={urgencyToneClass(deal.urgencyTone)}>
-            <AlertCircleIcon />
-            {deal.urgencyLabel}
-          </span>
+          <StatusPill label={deal.status} variant={statusVariant(deal.status)} />
+          <StatusPill
+            label={deal.urgencyLabel}
+            variant={urgencyVariant(deal.urgencyTone, deal.urgencyLabel)}
+          />
         </div>
         <div className="deal-card__location">
           <h2>{deal.address}</h2>
           <p>
             <LocationPinIcon />
-            {deal.cityState}
+            {formatCityState(deal.cityState)}
           </p>
         </div>
       </div>
@@ -108,17 +145,6 @@ function LocationPinIcon() {
     <svg viewBox="0 0 24 24" aria-hidden="true">
       <path
         d="M12 21s7-6.1 7-11a7 7 0 1 0-14 0c0 4.9 7 11 7 11Zm0-8.5a2.5 2.5 0 1 1 0-5 2.5 2.5 0 0 1 0 5Z"
-        fill="currentColor"
-      />
-    </svg>
-  );
-}
-
-function AlertCircleIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true">
-      <path
-        d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm0 5.25a1 1 0 0 1 1 1V12a1 1 0 1 1-2 0V8.25a1 1 0 0 1 1-1Zm0 9.5a1.25 1.25 0 1 1 0-2.5 1.25 1.25 0 0 1 0 2.5Z"
         fill="currentColor"
       />
     </svg>

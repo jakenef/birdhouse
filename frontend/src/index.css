@@ -6,6 +6,30 @@
   font-weight: 400;
   color: #0f172a;
   background-color: #e5e7eb;
+  --radius-lg: 1.24rem;
+  --surface-bg: rgba(255, 255, 255, 0.86);
+  --surface-bg-fallback: #f8fafc;
+  --surface-border: rgba(148, 163, 184, 0.28);
+  --surface-blur: 22px;
+  --surface-shadow:
+    0 10px 24px rgba(15, 23, 42, 0.08),
+    0 1px 4px rgba(15, 23, 42, 0.05);
+  --surface-shadow-soft:
+    0 6px 14px rgba(15, 23, 42, 0.06),
+    0 1px 3px rgba(15, 23, 42, 0.04);
+  --nav-height: 3.9rem;
+  --status-blue: #1d4ed8;
+  --status-blue-bg: #eff6ff;
+  --status-orange: #b45309;
+  --status-orange-bg: #fffbeb;
+  --status-purple: #6d28d9;
+  --status-purple-bg: #f5f3ff;
+  --status-red: #b91c1c;
+  --status-red-bg: #fef2f2;
+  --status-green: #047857;
+  --status-green-bg: #ecfdf5;
+  --status-gray: #4b5563;
+  --status-gray-bg: #f9fafb;
 
   font-synthesis: none;
   text-rendering: optimizeLegibility;
