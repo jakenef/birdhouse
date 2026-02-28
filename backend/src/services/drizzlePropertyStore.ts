@@ -5,7 +5,7 @@ import { db } from "../db";
 import { properties, type NewProperty } from "../db/schema";
 import { ParsedPurchaseContract } from "../schemas/parsedPurchaseContract.schema";
 import { DuplicatePropertyError, PropertyStore } from "./propertyStore";
-import { StoredPropertyRecord } from "../types/property";
+import { StoredPropertyRecord, StreetViewCacheEntry } from "../types/property";
 import { derivePropertyName } from "../utils/propertyName";
 
 // ---------------------------------------------------------------------------
@@ -75,6 +75,9 @@ function rowToStoredRecord(
     created_at_iso: row.createdAt,
     updated_at_iso: row.updatedAt,
     parsed_contract: contract,
+    street_view: row.streetViewJson
+      ? JSON.parse(row.streetViewJson)
+      : undefined,
   };
 }
 
@@ -126,5 +129,36 @@ export class DrizzlePropertyStore implements PropertyStore {
 
     if (rows.length === 0) return null;
     return rowToStoredRecord(rows[0]);
+  }
+
+  async findById(id: string): Promise<StoredPropertyRecord | null> {
+    const rows = await db
+      .select()
+      .from(properties)
+      .where(eq(properties.id, id))
+      .limit(1);
+
+    if (rows.length === 0) return null;
+    return rowToStoredRecord(rows[0]);
+  }
+
+  async updateStreetView(
+    id: string,
+    streetView: StreetViewCacheEntry,
+  ): Promise<StoredPropertyRecord> {
+    const now = new Date().toISOString();
+    await db
+      .update(properties)
+      .set({
+        streetViewJson: JSON.stringify(streetView),
+        updatedAt: now,
+      })
+      .where(eq(properties.id, id));
+
+    const updated = await this.findById(id);
+    if (!updated) {
+      throw new Error(`Property ${id} not found after street view update`);
+    }
+    return updated;
   }
 }

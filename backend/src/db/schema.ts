@@ -70,6 +70,9 @@ export const properties = sqliteTable("properties", {
 
   // Misc / notes
   notes: text("notes"),
+
+  // Street view cache (JSON blob)
+  streetViewJson: text("street_view_json"),
 });
 
 export type Property = typeof properties.$inferSelect;
