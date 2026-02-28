@@ -2122,3 +2122,311 @@
 .bh-pipeline-task-row__date--none {
   color: #94a3b8;
 }
+
+.settings-page {
+  display: grid;
+  gap: 0.78rem;
+  padding: 0.82rem 0.9rem calc(var(--nav-height) + env(safe-area-inset-bottom, 0px) + 1rem);
+}
+
+.settings-page__header h1 {
+  font-size: 18px;
+  line-height: 1.2;
+  color: #0f172a;
+  font-weight: 700;
+}
+
+.settings-page__header p {
+  margin-top: 0.38rem;
+  color: #5f6f84;
+  font-size: 12px;
+  line-height: 1.34;
+}
+
+.bh-settings-contacts-card {
+  border: 1px solid #d8e1ed;
+  border-radius: 1rem;
+  background: #ffffff;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
+  padding: 0.68rem;
+  display: grid;
+  gap: 0.6rem;
+}
+
+.bh-settings-contacts-card__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.7rem;
+}
+
+.bh-settings-contacts-card__header h2 {
+  font-size: 14px;
+  line-height: 1.2;
+  color: #0f172a;
+  font-weight: 700;
+}
+
+.bh-settings-contacts-card__header p {
+  margin-top: 0.26rem;
+  color: #64748b;
+  font-size: 11px;
+  line-height: 1.2;
+}
+
+.bh-settings-add-contact-btn {
+  border: 1px solid #3f6fae;
+  border-radius: 999px;
+  background: #1f4f97;
+  color: #f8fafc;
+  min-height: 2.2rem;
+  padding: 0.35rem 0.7rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.34rem;
+  font-size: 11px;
+  line-height: 1.2;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.bh-settings-add-contact-btn:focus-visible {
+  outline: 2px solid #1d4ed8;
+  outline-offset: 2px;
+}
+
+.bh-settings-toast {
+  margin: 0;
+  border: 1px solid #c2d4ec;
+  border-radius: 0.72rem;
+  background: #f7fbff;
+  color: #17386c;
+  padding: 0.5rem 0.62rem;
+  font-size: 11px;
+  line-height: 1.3;
+  font-weight: 600;
+}
+
+.bh-contacts-list-wrap {
+  border: 1px solid #dce4ef;
+  border-radius: 0.88rem;
+  background: #f8fafd;
+  padding: 0.36rem;
+  max-height: min(52vh, 32rem);
+  overflow-y: auto;
+}
+
+.bh-contacts-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.42rem;
+}
+
+.bh-contact-row {
+  border: 1px solid #d8e2f0;
+  border-radius: 0.78rem;
+  background: #ffffff;
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.05);
+  padding: 0.58rem 0.62rem;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.55rem;
+}
+
+.bh-contact-row__details {
+  min-width: 0;
+}
+
+.bh-contact-row__name-line {
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.32rem;
+  min-width: 0;
+}
+
+.bh-contact-row__name {
+  color: #0f172a;
+  font-size: 13px;
+  line-height: 1.24;
+  font-weight: 700;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.bh-contact-row__type {
+  border: 1px solid #d0def0;
+  border-radius: 999px;
+  background: #f2f7ff;
+  color: #3f5f8f;
+  font-size: 10px;
+  line-height: 1.1;
+  font-weight: 700;
+  padding: 0.16rem 0.4rem;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.bh-contact-row__email {
+  margin: 0.24rem 0 0;
+  color: #64748b;
+  font-size: 11px;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.bh-contact-row__actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.bh-contact-row__icon-btn {
+  width: 1.95rem;
+  height: 1.95rem;
+  border: 1px solid #d5dfed;
+  border-radius: 0.58rem;
+  background: #f8fbff;
+  color: #48628a;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.bh-contact-row__icon-btn--danger {
+  color: #9c3030;
+  background: #fff8f8;
+  border-color: #f2d7d7;
+}
+
+.bh-contact-row__icon-btn:focus-visible {
+  outline: 2px solid #1d4ed8;
+  outline-offset: 2px;
+}
+
+.bh-contact-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 58;
+  background: rgba(15, 23, 42, 0.26);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 0.7rem;
+}
+
+.bh-contact-modal {
+  width: min(34rem, 100%);
+  border-radius: 1rem;
+  border: 1px solid #d6dfeb;
+  background: #ffffff;
+  box-shadow:
+    0 16px 40px rgba(15, 23, 42, 0.2),
+    0 2px 10px rgba(15, 23, 42, 0.08);
+  padding: 0.68rem 0.74rem calc(0.74rem + env(safe-area-inset-bottom, 0px));
+}
+
+.bh-contact-modal__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.bh-contact-modal__header h2 {
+  font-size: 15px;
+  line-height: 1.2;
+  color: #0f172a;
+  font-weight: 700;
+}
+
+.bh-contact-modal__header button {
+  border: 1px solid #c4d3e8;
+  border-radius: 0.56rem;
+  background: #f8fbff;
+  color: #153d77;
+  font-size: 11px;
+  line-height: 1.2;
+  font-weight: 600;
+  padding: 0.34rem 0.56rem;
+  cursor: pointer;
+}
+
+.bh-contact-modal__form {
+  margin-top: 0.62rem;
+  display: grid;
+  gap: 0.56rem;
+}
+
+.bh-contact-modal__form label {
+  display: grid;
+  gap: 0.22rem;
+  color: #475569;
+  font-size: 11px;
+  line-height: 1.2;
+  font-weight: 600;
+}
+
+.bh-contact-modal__form input {
+  border: 1px solid #d4deeb;
+  border-radius: 0.62rem;
+  background: #ffffff;
+  color: #0f172a;
+  font-size: 12px;
+  line-height: 1.35;
+  padding: 0.5rem 0.58rem;
+  font-family: inherit;
+}
+
+.bh-contact-modal__form input:focus {
+  outline: 2px solid #bfdbfe;
+  border-color: #5d8fd7;
+}
+
+.bh-contact-modal__error {
+  margin: 0;
+  border: 1px solid #fecaca;
+  border-radius: 0.62rem;
+  background: #fef2f2;
+  color: #991b1b;
+  padding: 0.42rem 0.55rem;
+  font-size: 11px;
+  line-height: 1.3;
+}
+
+.bh-contact-modal__actions {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.5rem;
+}
+
+.bh-contact-modal__actions button {
+  border: 1px solid #c4d3e8;
+  border-radius: 0.62rem;
+  background: #f8fbff;
+  color: #153d77;
+  min-height: 2.35rem;
+  padding: 0.44rem 0.68rem;
+  font-size: 12px;
+  line-height: 1.2;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.bh-contact-modal__actions button[type="submit"] {
+  border-color: #3f6fae;
+  background: #1f4f97;
+  color: #f8fafc;
+}
+
+.bh-contact-modal__actions button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
