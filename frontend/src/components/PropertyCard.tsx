@@ -34,24 +34,6 @@ function formatDate(isoDate: string): string {
   return dateFormatter.format(parsed);
 }
 
-function formatRelative(isoDate: string): string {
-  const parsed = new Date(isoDate);
-  if (Number.isNaN(parsed.getTime())) {
-    return "";
-  }
-
-  const elapsedHours = Math.max(
-    1,
-    Math.round((Date.now() - parsed.getTime()) / (1000 * 60 * 60)),
-  );
-
-  if (elapsedHours < 24) {
-    return `${elapsedHours}h ago`;
-  }
-
-  return `${Math.round(elapsedHours / 24)}d ago`;
-}
-
 function statusToneClass(status: string): string {
   const normalized = status.toLowerCase();
   if (normalized.includes("due diligence")) {
@@ -106,21 +88,18 @@ export function PropertyCard({ deal, onOpenDeal }: PropertyCardProps) {
       <dl className="deal-card__summary">
         <div>
           <dt>Offer</dt>
-          <dd>{formatPrice(deal.offerPrice)}</dd>
+          <dd className="deal-card__value deal-card__value--price">{formatPrice(deal.offerPrice)}</dd>
+        </div>
+        <div>
+          <dt>Started</dt>
+          <dd className="deal-card__value deal-card__value--date">{formatDate(deal.startedDateIso)}</dd>
         </div>
         <div>
           <dt>
             <CalendarIcon />
             Close
           </dt>
-          <dd>{formatDate(deal.closeDateIso)}</dd>
-        </div>
-        <div>
-          <dt>Started</dt>
-          <div className="deal-card__started-row">
-            <dd>{formatDate(deal.startedDateIso)}</dd>
-            <p>{formatRelative(deal.updatedAtIso)}</p>
-          </div>
+          <dd className="deal-card__value deal-card__value--date">{formatDate(deal.closeDateIso)}</dd>
         </div>
       </dl>
     </button>
