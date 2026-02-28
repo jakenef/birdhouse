@@ -25,6 +25,12 @@ MAX_FILE_MB=15
 REQUEST_TIMEOUT_MS=60000
 ```
 
+Notes:
+
+- `/api/parse` requires the Google Document AI and OpenAI variables above.
+- `/api/properties` mock persistence can run without those parse-service credentials.
+- `MOCK_PROPERTIES_DB_PATH` is optional and only affects the mock property store path.
+
 ## Install
 
 ```bash
@@ -75,6 +81,81 @@ Sanity check the JSON response:
 - dates are `YYYY-MM-DD` or `null`
 - missing critical fields appear in `obligations_and_risks.missing_info`
 - summary mentions only values present in the parsed contract data
+
+## Mock Property Endpoints
+
+These endpoints are mock-database ready. They use a file-backed store today, but the
+route contract is intended to stay stable if the storage layer is replaced with a real
+database later.
+
+### Save a parsed contract
+
+`POST /api/properties`
+
+- Content type: `application/json`
+- Request body: exact `ParsedPurchaseContract` JSON returned by `/api/parse`
+
+Example flow:
+
+1. Call `/api/parse`
+2. Send the returned JSON to `/api/properties`
+
+Success response:
+
+```json
+{
+  "property": {
+    "id": "prop_...",
+    "property_name": "6150 Hahn Run Suite 008, Park City, UT 84605",
+    "doc_hash": "396d6e5e0edff43917d92cf5f48ce979cfa74a66f7e480afdc6c28a53e8294c8",
+    "created_at_iso": "2026-02-28T03:00:00.000Z",
+    "updated_at_iso": "2026-02-28T03:00:00.000Z"
+  }
+}
+```
+
+### List properties for frontend cards
+
+`GET /api/properties`
+
+This is the endpoint the frontend should use to populate property cards.
+
+Response shape:
+
+```json
+{
+  "properties": [
+    {
+      "id": "prop_...",
+      "property_name": "6150 Hahn Run Suite 008, Park City, UT 84605",
+      "doc_hash": "396d6e5e0edff43917d92cf5f48ce979cfa74a66f7e480afdc6c28a53e8294c8",
+      "address_full": "6150 Hahn Run Suite 008, Park City, UT 84605",
+      "city": "Park City",
+      "state": "UT",
+      "zip": "84605",
+      "purchase_price": 424106,
+      "buyers": ["Gerald Davis", "Jasmine Figueroa"],
+      "sellers": ["Fitzgerald Ltd Inc."],
+      "effective_date": "2026-03-04",
+      "settlement_deadline": "2026-04-30",
+      "created_at_iso": "2026-02-28T03:00:00.000Z",
+      "updated_at_iso": "2026-02-28T03:00:00.000Z"
+    }
+  ]
+}
+```
+
+### Mock storage file
+
+The default mock store path is:
+
+`backend/data/mock-properties.json`
+
+You can override it with:
+
+```env
+MOCK_PROPERTIES_DB_PATH=C:\path\to\mock-properties.json
+```
 
 ## Tests
 

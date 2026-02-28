@@ -1,34 +1,19 @@
 import "dotenv/config";
+import path from "path";
 import cors from "cors";
 import express, { NextFunction, Request, Response } from "express";
 import multer from "multer";
 
 import { parseRouter } from "./routes/parse";
-import { propertiesRouter } from "./routes/properties";
-import { seedProperties } from "./db/seed";
-
-const requiredEnvVars = [
-  "GOOGLE_CLOUD_PROJECT_ID",
-  "GOOGLE_CLOUD_LOCATION",
-  "DOCUMENT_AI_PROCESSOR_ID",
-  "GOOGLE_APPLICATION_CREDENTIALS",
-  "OPENAI_API_KEY",
-  "OPENAI_MODEL",
-] as const;
-
-const missingEnvVars = requiredEnvVars.filter((envVar) => {
-  const value = process.env[envVar];
-  return !value || value.trim().length === 0;
-});
-
-if (missingEnvVars.length > 0) {
-  throw new Error(
-    `Missing required environment variables: ${missingEnvVars.join(", ")}`,
-  );
-}
+import { createPropertiesRouter } from "./routes/properties";
+import { FilePropertyStore } from "./services/filePropertyStore";
 
 const app = express();
 const port = Number(process.env.PORT || "3001");
+const propertyStore = new FilePropertyStore(
+  process.env.MOCK_PROPERTIES_DB_PATH ||
+    path.resolve(process.cwd(), "data", "mock-properties.json"),
+);
 
 app.use(cors());
 app.use(express.json());
@@ -42,34 +27,29 @@ app.get("/health", (_req: Request, res: Response) => {
 });
 
 app.use("/api", parseRouter);
-app.use("/api/properties", propertiesRouter);
+app.use("/api", createPropertiesRouter(propertyStore));
 
-app.use(
-  (error: unknown, _req: Request, res: Response, _next: NextFunction) => {
-    if (error instanceof multer.MulterError && error.code === "LIMIT_FILE_SIZE") {
-      res.status(400).json({
-        error: {
-          message: "File exceeds the configured max size.",
-        },
-      });
-      return;
-    }
-
-    const message =
-      error instanceof Error ? error.message : "Internal server error";
-
-    res.status(500).json({
+app.use((error: unknown, _req: Request, res: Response, _next: NextFunction) => {
+  if (error instanceof multer.MulterError && error.code === "LIMIT_FILE_SIZE") {
+    res.status(400).json({
       error: {
-        message,
+        message: "File exceeds the configured max size.",
       },
     });
-  },
-);
+    return;
+  }
 
-app.listen(port, async () => {
-  // Seed sample data in dev
-  await seedProperties();
+  const message =
+    error instanceof Error ? error.message : "Internal server error";
 
+  res.status(500).json({
+    error: {
+      message,
+    },
+  });
+});
+
+app.listen(port, () => {
   console.log(
     JSON.stringify({
       event: "server_started",

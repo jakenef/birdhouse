@@ -28,8 +28,8 @@ export const properties = sqliteTable("properties", {
   downPayment: real("down_payment"),
 
   // Key dates
-  acceptanceDate: text("acceptance_date"),     // effective date of contract
-  closingDate: text("closing_date"),           // settlement date
+  acceptanceDate: text("acceptance_date"), // effective date of contract
+  closingDate: text("closing_date"), // settlement date
   possessionDate: text("possession_date"),
 
   // Deadline dates (parsed from contract)

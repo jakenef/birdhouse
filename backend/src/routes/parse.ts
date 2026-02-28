@@ -13,6 +13,14 @@ import { sha256 } from "../utils/hash";
 
 const maxFileMb = Number(process.env.MAX_FILE_MB || "15");
 const requestTimeoutMs = Number(process.env.REQUEST_TIMEOUT_MS || "60000");
+const requiredParseEnvVars = [
+  "GOOGLE_CLOUD_PROJECT_ID",
+  "GOOGLE_CLOUD_LOCATION",
+  "DOCUMENT_AI_PROCESSOR_ID",
+  "GOOGLE_APPLICATION_CREDENTIALS",
+  "OPENAI_API_KEY",
+  "OPENAI_MODEL",
+] as const;
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -22,6 +30,13 @@ const upload = multer({
 });
 
 export const parseRouter = express.Router();
+
+function getMissingParseEnvVars(): string[] {
+  return requiredParseEnvVars.filter((envVar) => {
+    const value = process.env[envVar];
+    return !value || value.trim().length === 0;
+  });
+}
 
 parseRouter.post(
   "/parse",
@@ -43,6 +58,16 @@ parseRouter.post(
       res.status(400).json({
         error: {
           message: "Only application/pdf uploads are supported.",
+        },
+      });
+      return;
+    }
+
+    const missingParseEnvVars = getMissingParseEnvVars();
+    if (missingParseEnvVars.length > 0) {
+      res.status(503).json({
+        error: {
+          message: `Parse service is not configured. Missing environment variables: ${missingParseEnvVars.join(", ")}`,
         },
       });
       return;
