@@ -95,10 +95,7 @@ export function PropertyCard({ deal, onOpenDeal }: PropertyCardProps) {
           <dd className="deal-card__value deal-card__value--date">{formatDate(deal.startedDateIso)}</dd>
         </div>
         <div>
-          <dt>
-            <CalendarIcon />
-            Close
-          </dt>
+          <dt>Close</dt>
           <dd className="deal-card__value deal-card__value--date">{formatDate(deal.closeDateIso)}</dd>
         </div>
       </dl>
@@ -111,17 +108,6 @@ function LocationPinIcon() {
     <svg viewBox="0 0 24 24" aria-hidden="true">
       <path
         d="M12 21s7-6.1 7-11a7 7 0 1 0-14 0c0 4.9 7 11 7 11Zm0-8.5a2.5 2.5 0 1 1 0-5 2.5 2.5 0 0 1 0 5Z"
-        fill="currentColor"
-      />
-    </svg>
-  );
-}
-
-function CalendarIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true">
-      <path
-        d="M7 2a1 1 0 0 1 1 1v1h8V3a1 1 0 1 1 2 0v1h1a3 3 0 0 1 3 3v12a3 3 0 0 1-3 3H5a3 3 0 0 1-3-3V7a3 3 0 0 1 3-3h1V3a1 1 0 0 1 1-1Zm12 8H5v9a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-9ZM6 6a1 1 0 0 0-1 1v1h14V7a1 1 0 0 0-1-1H6Z"
         fill="currentColor"
       />
     </svg>
