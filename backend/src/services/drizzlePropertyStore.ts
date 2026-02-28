@@ -97,8 +97,8 @@ export class DrizzlePropertyStore implements PropertyStore {
   /**
    * Generate a unique property email by appending numeric suffixes if collisions occur.
    * Examples:
-   *   "6119 W Montauk Ln" -> "6119-w-montauk-ln@domain"
-   *   If collision -> "6119-w-montauk-ln-2@domain"
+   *   "6119 W Montauk Ln" -> "6119montauk@domain"
+   *   If collision -> "6119montauk-2@domain"
    */
   private async generateUniquePropertyEmail(
     address: string | null | undefined,
@@ -196,7 +196,9 @@ export class DrizzlePropertyStore implements PropertyStore {
     return rowToStoredRecord(rows[0]);
   }
 
-  async getWorkflowState(propertyId: string): Promise<PropertyWorkflowState | null> {
+  async getWorkflowState(
+    propertyId: string,
+  ): Promise<PropertyWorkflowState | null> {
     const property = await this.findById(propertyId);
     return property?.workflow_state || null;
   }

@@ -496,6 +496,27 @@ export function createPropertiesRouter(
           }
         }
 
+        // Transform StoredInboxMessage → ApiMessage shape the frontend expects
+        const apiMessages = messages.map((msg) => ({
+          id: msg.id,
+          from: { email: msg.from_email, name: msg.from_name },
+          to: msg.to,
+          cc: msg.cc ?? [],
+          subject: msg.subject,
+          body_text: msg.body_text ?? "",
+          body_html: msg.body_html ?? null,
+          attachments: [] as Array<{
+            id: string;
+            filename: string;
+            mime_type: string;
+            size_bytes: number;
+            download_url: string;
+          }>,
+          sent_at: msg.sent_at,
+          read: msg.read,
+          direction: msg.direction,
+        }));
+
         res.json({
           thread: {
             id: req.params.threadId,
@@ -503,7 +524,7 @@ export function createPropertiesRouter(
             participants: Array.from(participantMap.values()),
             created_at: messages[0].sent_at,
           },
-          messages,
+          messages: apiMessages,
         });
       } catch (error) {
         res.status(500).json({
@@ -669,6 +690,7 @@ export function createPropertiesRouter(
           });
 
         if (sendError || !emailResult) {
+          console.error("[inbox send] Resend API error:", sendError);
           res.status(502).json({
             error: {
               message: sendError?.message ?? "Failed to send email via Resend.",
