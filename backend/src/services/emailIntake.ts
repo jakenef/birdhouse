@@ -16,8 +16,6 @@ import { EarnestWorkflowService } from "./earnestWorkflow";
 import { EarnestInboxAutomation } from "./earnestInboxAutomation";
 import { InboxStore } from "./inboxStore";
 import { extractContractSummary, summarizePdf } from "./documentSummarizer";
-import { db } from "../db";
-import { processedEmails } from "../db/schema";
 
 // ---------------------------------------------------------------------------
 // Config

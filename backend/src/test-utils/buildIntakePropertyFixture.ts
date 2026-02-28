@@ -96,6 +96,7 @@ export function buildIntakePropertyFixture(
     size_bytes: 1024,
     doc_hash: docHash,
     source: "email_intake",
+    ai_summary: null,
     created_at: "2026-02-28T00:00:00.000Z",
   };
 
