@@ -12,7 +12,15 @@ import {
   GoogleStreetViewServiceError,
   StreetViewService,
 } from "../services/googleStreetView";
+import {
+  EarnestWorkflowError,
+  EarnestWorkflowService,
+} from "../services/earnestWorkflow";
 import { DocumentStore } from "../services/documentStore";
+import {
+  PropertyEmailSender,
+  SendPropertyEmailInput,
+} from "../services/propertyEmailSender";
 import { StreetViewCacheEntry } from "../types/property";
 import { toPropertyCardDto } from "../utils/propertyCard";
 
@@ -111,8 +119,27 @@ export function createPropertiesRouter(
   propertyStore: PropertyStore,
   streetViewService: StreetViewService,
   documentStore: DocumentStore,
+  earnestWorkflowService: EarnestWorkflowService,
+  propertyEmailSender: PropertyEmailSender,
 ) {
   const router = express.Router();
+
+  function sendEarnestWorkflowError(res: Response, error: EarnestWorkflowError) {
+    if (error.message === "Property not found.") {
+      res.status(404).json({
+        error: {
+          message: error.message,
+        },
+      });
+      return;
+    }
+
+    res.status(400).json({
+      error: {
+        message: error.message,
+      },
+    });
+  }
 
   router.post("/properties", async (req: Request, res: Response) => {
     if (!isParsedPurchaseContract(req.body)) {
@@ -699,19 +726,49 @@ export function createPropertiesRouter(
           return;
         }
 
-        // Mock response - in real implementation, this would call Resend API
-        const mockMessageId = `msg_${Date.now()}_${Math.random().toString(36).substring(7)}`;
-        const mockThreadId =
-          req.body.reply_to_thread_id || `thread_${Date.now()}`;
+        if (!property.property_email) {
+          res.status(400).json({
+            error: { message: "Property email is not configured." },
+          });
+          return;
+        }
+
+        const sendInput: SendPropertyEmailInput = {
+          property_id: property.id,
+          from: property.property_email,
+          to: req.body.to,
+          subject: req.body.subject,
+          body: req.body.body,
+          body_html: req.body.body_html || null,
+          reply_to_thread_id: req.body.reply_to_thread_id || null,
+          attachments: Array.isArray(req.body.attachments)
+            ? req.body.attachments
+                .filter(
+                  (attachment: Record<string, unknown>) =>
+                    typeof attachment.filename === "string" &&
+                    typeof attachment.mime_type === "string",
+                )
+                .map((attachment: Record<string, unknown>, index: number) => ({
+                  document_id:
+                    typeof attachment.document_id === "string"
+                      ? attachment.document_id
+                      : `inline_${index}`,
+                  filename: attachment.filename as string,
+                  mime_type: attachment.mime_type as string,
+                }))
+            : [],
+        };
+
+        const sentMessage = await propertyEmailSender.send(sendInput);
 
         res.status(201).json({
           message: {
-            id: mockMessageId,
-            thread_id: mockThreadId,
-            sent_at: new Date().toISOString(),
-            from: property.property_email || "",
-            to: req.body.to,
-            subject: req.body.subject,
+            id: sentMessage.id,
+            thread_id: sentMessage.thread_id,
+            sent_at: sentMessage.sent_at,
+            from: sentMessage.from,
+            to: sentMessage.to,
+            subject: sentMessage.subject,
           },
         });
       } catch (error) {
@@ -721,6 +778,107 @@ export function createPropertiesRouter(
               error instanceof Error
                 ? error.message
                 : "Unexpected server error",
+          },
+        });
+      }
+    },
+  );
+
+  router.get(
+    "/properties/:propertyId/pipeline/earnest",
+    async (req: Request, res: Response) => {
+      try {
+        const earnest = await earnestWorkflowService.getEarnestStep(
+          req.params.propertyId,
+        );
+        res.json({ earnest });
+      } catch (error) {
+        if (error instanceof EarnestWorkflowError) {
+          sendEarnestWorkflowError(res, error);
+          return;
+        }
+
+        res.status(500).json({
+          error: {
+            message:
+              error instanceof Error ? error.message : "Unexpected server error",
+          },
+        });
+      }
+    },
+  );
+
+  router.post(
+    "/properties/:propertyId/pipeline/earnest/prepare",
+    async (req: Request, res: Response) => {
+      try {
+        const earnest = await earnestWorkflowService.prepareEarnestStep(
+          req.params.propertyId,
+        );
+        res.json({ earnest });
+      } catch (error) {
+        if (error instanceof EarnestWorkflowError) {
+          sendEarnestWorkflowError(res, error);
+          return;
+        }
+
+        res.status(500).json({
+          error: {
+            message:
+              error instanceof Error ? error.message : "Unexpected server error",
+          },
+        });
+      }
+    },
+  );
+
+  router.post(
+    "/properties/:propertyId/pipeline/earnest/send",
+    async (req: Request, res: Response) => {
+      const { subject, body, body_html } = req.body;
+
+      if (!subject || typeof subject !== "string") {
+        res.status(400).json({
+          error: {
+            message: "Missing or invalid 'subject' field.",
+          },
+        });
+        return;
+      }
+
+      if (!body || typeof body !== "string") {
+        res.status(400).json({
+          error: {
+            message: "Missing or invalid 'body' field.",
+          },
+        });
+        return;
+      }
+
+      try {
+        const earnest = await earnestWorkflowService.sendEarnestDraft(
+          req.params.propertyId,
+          {
+            subject,
+            body,
+            body_html:
+              typeof body_html === "string" || body_html === null
+                ? body_html
+                : null,
+          },
+        );
+
+        res.status(201).json({ earnest });
+      } catch (error) {
+        if (error instanceof EarnestWorkflowError) {
+          sendEarnestWorkflowError(res, error);
+          return;
+        }
+
+        res.status(500).json({
+          error: {
+            message:
+              error instanceof Error ? error.message : "Unexpected server error",
           },
         });
       }

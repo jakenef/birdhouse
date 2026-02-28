@@ -10,6 +10,7 @@ import { extractContractFieldsFromDocAi } from "./docai";
 import { parsePurchaseContractWithOpenAi } from "./openai";
 import { PropertyStore, DuplicatePropertyError } from "./propertyStore";
 import { DocumentStore } from "./documentStore";
+import { EarnestWorkflowService } from "./earnestWorkflow";
 import { db } from "../db";
 import { processedEmails } from "../db/schema";
 
@@ -104,6 +105,7 @@ async function processIntakeEmail(
   docHash: string,
   store: PropertyStore,
   docStore: DocumentStore,
+  earnestWorkflowService: EarnestWorkflowService,
 ): Promise<void> {
   // Check for duplicate PDF by hash before calling APIs
   const existing = await store.findByDocHash(docHash);
@@ -147,6 +149,14 @@ async function processIntakeEmail(
     docHash,
     source: "email_intake",
   });
+
+  try {
+    await earnestWorkflowService.prepareEarnestStep(record.id);
+  } catch (error) {
+    log(
+      `earnest workflow setup failed for ${record.id}: ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
 
   const c = parsedContract;
 
@@ -204,6 +214,7 @@ async function processEmail(
   isIntakeEmail: boolean,
   store: PropertyStore,
   docStore: DocumentStore,
+  earnestWorkflowService: EarnestWorkflowService,
 ): Promise<void> {
   const pdfAttachments = (email.attachments ?? []).filter(
     (att: { content_type: string }) => att.content_type === "application/pdf",
@@ -260,6 +271,7 @@ async function processEmail(
           docHash,
           store,
           docStore,
+          earnestWorkflowService,
         );
       } else {
         await processPropertyEmail(
@@ -286,6 +298,7 @@ async function pollOnce(
   resend: Resend,
   store: PropertyStore,
   docStore: DocumentStore,
+  earnestWorkflowService: EarnestWorkflowService,
 ): Promise<void> {
   const { data: listData, error: listError } =
     await resend.emails.receiving.list();
@@ -343,13 +356,29 @@ async function pollOnce(
 
   // Phase 1: Process intake emails FIRST (creates properties)
   for (const { email, targetEmail } of intakeEmails) {
-    await processEmail(resend, email, targetEmail, true, store, docStore);
+    await processEmail(
+      resend,
+      email,
+      targetEmail,
+      true,
+      store,
+      docStore,
+      earnestWorkflowService,
+    );
     await markEmailProcessed(email.id);
   }
 
   // Phase 2: Process property-specific emails (adds docs to existing properties)
   for (const { email, targetEmail } of propertyEmails) {
-    await processEmail(resend, email, targetEmail, false, store, docStore);
+    await processEmail(
+      resend,
+      email,
+      targetEmail,
+      false,
+      store,
+      docStore,
+      earnestWorkflowService,
+    );
     await markEmailProcessed(email.id);
   }
 }
@@ -363,6 +392,7 @@ let pollTimer: ReturnType<typeof setInterval> | null = null;
 export function startEmailPolling(
   store: PropertyStore,
   docStore: DocumentStore,
+  earnestWorkflowService: EarnestWorkflowService,
 ): void {
   const apiKey = process.env.RESEND_API_KEY;
 
@@ -378,12 +408,12 @@ export function startEmailPolling(
   );
 
   // Run immediately, then on interval
-  pollOnce(resend, store, docStore).catch((err) =>
+  pollOnce(resend, store, docStore, earnestWorkflowService).catch((err) =>
     log(`poll error: ${err instanceof Error ? err.message : String(err)}`),
   );
 
   pollTimer = setInterval(() => {
-    pollOnce(resend, store, docStore).catch((err) =>
+    pollOnce(resend, store, docStore, earnestWorkflowService).catch((err) =>
       log(`poll error: ${err instanceof Error ? err.message : String(err)}`),
     );
   }, POLL_INTERVAL_MS);

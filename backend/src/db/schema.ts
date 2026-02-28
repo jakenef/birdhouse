@@ -52,6 +52,8 @@ export const properties = sqliteTable("properties", {
   status: text("status").default("active"),
   // "active" | "closed" | "archived" | "cancelled"
 
+  workflowStateJson: text("workflow_state_json"),
+
   // Unique property email for inbound docs
   propertyEmail: text("property_email").unique(),
 

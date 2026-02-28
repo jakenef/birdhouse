@@ -13,6 +13,7 @@ import {
   StoredPropertyRecord,
   StreetViewCacheEntry,
 } from "../types/property";
+import { PropertyWorkflowState } from "../types/workflow";
 import { derivePropertyName } from "../utils/propertyName";
 import { buildPropertyEmail } from "../utils/emailSlug";
 
@@ -37,8 +38,54 @@ function isStoredPropertyRecord(value: unknown): value is StoredPropertyRecord {
     typeof record.updated_at_iso === "string" &&
     typeof record.parsed_contract === "object" &&
     record.parsed_contract !== null &&
+    (record.workflow_state === undefined ||
+      isPropertyWorkflowState(record.workflow_state)) &&
     (record.street_view === undefined ||
       isStreetViewCacheEntry(record.street_view))
+  );
+}
+
+function isPipelineStepStatus(value: unknown): boolean {
+  return (
+    value === "locked" ||
+    value === "action_needed" ||
+    value === "waiting_for_parties" ||
+    value === "completed"
+  );
+}
+
+function isPropertyWorkflowState(value: unknown): value is PropertyWorkflowState {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  const workflow = value as Record<string, unknown>;
+  const steps = workflow.steps as Record<string, unknown> | undefined;
+  const earnest = workflow.earnest as Record<string, unknown> | undefined;
+  const draft = earnest?.draft as Record<string, unknown> | undefined;
+
+  return (
+    workflow.version === 1 &&
+    typeof workflow.current_label === "string" &&
+    !!steps &&
+    ["under_contract", "earnest_money", "due_diligence_inspection", "financing", "title_escrow", "closing"].every(
+      (key) => {
+        const step = steps[key] as Record<string, unknown> | undefined;
+        return (
+          !!step &&
+          typeof step.label === "string" &&
+          isPipelineStepStatus(step.status) &&
+          (step.locked_reason === null || typeof step.locked_reason === "string") &&
+          typeof step.last_transition_at_iso === "string" &&
+          (step.last_transition_reason === null ||
+            typeof step.last_transition_reason === "string")
+        );
+      },
+    ) &&
+    !!earnest &&
+    (earnest.prompt_to_user === null || typeof earnest.prompt_to_user === "string") &&
+    !!draft &&
+    typeof draft.status === "string"
   );
 }
 
@@ -155,6 +202,34 @@ export class FilePropertyStore implements PropertyStore {
       database.properties.find((record) => record.property_email === email) ||
       null
     );
+  }
+
+  async getWorkflowState(propertyId: string): Promise<PropertyWorkflowState | null> {
+    const property = await this.findById(propertyId);
+    return property?.workflow_state || null;
+  }
+
+  async updateWorkflowState(
+    id: string,
+    workflowState: PropertyWorkflowState,
+  ): Promise<StoredPropertyRecord> {
+    const database = await this.readDatabase();
+    const index = database.properties.findIndex((record) => record.id === id);
+
+    if (index === -1) {
+      throw new PropertyStoreError(`Property ${id} was not found.`);
+    }
+
+    const updatedRecord: StoredPropertyRecord = {
+      ...database.properties[index],
+      workflow_state: workflowState,
+      updated_at_iso: new Date().toISOString(),
+    };
+
+    database.properties[index] = updatedRecord;
+    await this.writeDatabase(database);
+
+    return updatedRecord;
   }
 
   async updateStreetView(

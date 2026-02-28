@@ -1,21 +1,7 @@
 import { Router, Request, Response } from "express";
+import { Contact, ContactStore } from "../services/contactStore";
 
-// -------------------------------------------------------------------------
-// In-memory contact storage
-// TODO: Move to database when user authentication is implemented
-// -------------------------------------------------------------------------
-interface Contact {
-  type: string;
-  name: string;
-  email: string;
-  phone?: string;
-  company?: string;
-  updated_at: string;
-}
-
-const contacts = new Map<string, Contact>();
-
-export function createContactsRouter(): Router {
+export function createContactsRouter(contactStore: ContactStore): Router {
   const router = Router();
 
   // -------------------------------------------------------------------------
@@ -76,7 +62,7 @@ export function createContactsRouter(): Router {
         updated_at: new Date().toISOString(),
       };
 
-      contacts.set(type.trim(), contact);
+      contactStore.set(contact);
 
       res.status(200).json({ contact });
     } catch (error) {
@@ -99,7 +85,7 @@ export function createContactsRouter(): Router {
   // -------------------------------------------------------------------------
   router.get("/contacts", async (req: Request, res: Response) => {
     try {
-      const allContacts = Array.from(contacts.values());
+      const allContacts = contactStore.list();
       res.json({ contacts: allContacts });
     } catch (error) {
       res.status(500).json({

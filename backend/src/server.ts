@@ -7,9 +7,12 @@ import multer from "multer";
 import { parseRouter } from "./routes/parse";
 import { createPropertiesRouter } from "./routes/properties";
 import { createContactsRouter } from "./routes/contacts";
+import { ContactStore } from "./services/contactStore";
+import { EarnestWorkflowService } from "./services/earnestWorkflow";
 import { GoogleStreetViewService } from "./services/googleStreetView";
 import { DrizzlePropertyStore } from "./services/drizzlePropertyStore";
 import { DocumentStore } from "./services/documentStore";
+import { PropertyEmailSender } from "./services/propertyEmailSender";
 import { startEmailPolling } from "./services/emailIntake";
 
 const app = express();
@@ -17,6 +20,14 @@ const port = Number(process.env.PORT || "3001");
 const propertyStore = new DrizzlePropertyStore();
 const documentStore = new DocumentStore();
 const streetViewService = new GoogleStreetViewService();
+const contactStore = new ContactStore();
+const propertyEmailSender = new PropertyEmailSender();
+const earnestWorkflowService = new EarnestWorkflowService(
+  propertyStore,
+  documentStore,
+  contactStore,
+  propertyEmailSender,
+);
 
 app.use(cors());
 app.use(express.json());
@@ -32,9 +43,15 @@ app.get("/health", (_req: Request, res: Response) => {
 app.use("/api", parseRouter);
 app.use(
   "/api",
-  createPropertiesRouter(propertyStore, streetViewService, documentStore),
+  createPropertiesRouter(
+    propertyStore,
+    streetViewService,
+    documentStore,
+    earnestWorkflowService,
+    propertyEmailSender,
+  ),
 );
-app.use("/api", createContactsRouter());
+app.use("/api", createContactsRouter(contactStore));
 
 app.use((error: unknown, _req: Request, res: Response, _next: NextFunction) => {
   if (error instanceof multer.MulterError && error.code === "LIMIT_FILE_SIZE") {
@@ -58,7 +75,7 @@ app.use((error: unknown, _req: Request, res: Response, _next: NextFunction) => {
 
 app.listen(port, () => {
   // Start email intake polling
-  startEmailPolling(propertyStore, documentStore);
+  startEmailPolling(propertyStore, documentStore, earnestWorkflowService);
 
   console.log(
     JSON.stringify({
