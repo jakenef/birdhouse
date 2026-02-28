@@ -8,7 +8,11 @@ import {
   PropertyStore,
   PropertyStoreError,
 } from "./propertyStore";
-import { MockPropertiesFile, StoredPropertyRecord } from "../types/property";
+import {
+  MockPropertiesFile,
+  StoredPropertyRecord,
+  StreetViewCacheEntry,
+} from "../types/property";
 import { derivePropertyName } from "../utils/propertyName";
 
 const EMPTY_DATABASE: MockPropertiesFile = {
@@ -31,7 +35,40 @@ function isStoredPropertyRecord(value: unknown): value is StoredPropertyRecord {
     typeof record.created_at_iso === "string" &&
     typeof record.updated_at_iso === "string" &&
     typeof record.parsed_contract === "object" &&
-    record.parsed_contract !== null
+    record.parsed_contract !== null &&
+    (record.street_view === undefined || isStreetViewCacheEntry(record.street_view))
+  );
+}
+
+function isStreetViewStatus(value: unknown): value is StreetViewCacheEntry["status"] {
+  return value === "available" || value === "unavailable" || value === "error";
+}
+
+function isStreetViewCacheEntry(value: unknown): value is StreetViewCacheEntry {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  const entry = value as Record<string, unknown>;
+  return (
+    isStreetViewStatus(entry.status) &&
+    typeof entry.last_checked_at_iso === "string" &&
+    (entry.source_address === null || typeof entry.source_address === "string") &&
+    (entry.resolved_address === null ||
+      typeof entry.resolved_address === "string") &&
+    (entry.latitude === null || typeof entry.latitude === "number") &&
+    (entry.longitude === null || typeof entry.longitude === "number") &&
+    (entry.target_latitude === undefined ||
+      entry.target_latitude === null ||
+      typeof entry.target_latitude === "number") &&
+    (entry.target_longitude === undefined ||
+      entry.target_longitude === null ||
+      typeof entry.target_longitude === "number") &&
+    (entry.heading === undefined ||
+      entry.heading === null ||
+      typeof entry.heading === "number") &&
+    (entry.pano_id === null || typeof entry.pano_id === "string") &&
+    (entry.error_message === null || typeof entry.error_message === "string")
   );
 }
 
@@ -92,6 +129,35 @@ export class FilePropertyStore implements PropertyStore {
         (record) => record.parsed_contract.metadata.doc_hash === docHash,
       ) || null
     );
+  }
+
+  async findById(id: string): Promise<StoredPropertyRecord | null> {
+    const database = await this.readDatabase();
+    return database.properties.find((record) => record.id === id) || null;
+  }
+
+  async updateStreetView(
+    id: string,
+    streetView: StreetViewCacheEntry,
+  ): Promise<StoredPropertyRecord> {
+    const database = await this.readDatabase();
+    const index = database.properties.findIndex((record) => record.id === id);
+
+    if (index === -1) {
+      throw new PropertyStoreError(`Property ${id} was not found.`);
+    }
+
+    const record = database.properties[index];
+    const updatedRecord: StoredPropertyRecord = {
+      ...record,
+      updated_at_iso: new Date().toISOString(),
+      street_view: streetView,
+    };
+
+    database.properties[index] = updatedRecord;
+    await this.writeDatabase(database);
+
+    return updatedRecord;
   }
 
   private async ensureDatabaseFile(): Promise<void> {

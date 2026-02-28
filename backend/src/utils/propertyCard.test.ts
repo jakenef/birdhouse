@@ -90,6 +90,19 @@ describe("toPropertyCardDto", () => {
       settlement_deadline: "2026-04-01",
       created_at_iso: "2026-02-28T01:00:00.000Z",
       updated_at_iso: "2026-02-28T01:00:00.000Z",
+      street_view: {
+        status: "unavailable",
+        image_url: null,
+        last_checked_at_iso: null,
+        source_address: null,
+        resolved_address: null,
+        latitude: null,
+        longitude: null,
+        target_latitude: null,
+        target_longitude: null,
+        heading: null,
+        pano_id: null,
+      },
     });
   });
 });
