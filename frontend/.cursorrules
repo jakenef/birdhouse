@@ -1,0 +1,28 @@
+Monorepo scope and boundaries
+- This repository is a monorepo with separate `/frontend` and `/backend` folders.
+- Frontend agent work is scoped to frontend implementation only.
+- Only modify files inside `/frontend/src` unless explicitly instructed otherwise.
+- Never modify, create, delete, or refactor anything inside `/backend`.
+- Backend files may be read only to understand API endpoints, request/response shapes, and data contracts.
+- Do not edit backend code under any circumstance without explicit user instruction.
+
+Frontend architecture rules
+- Pages must live in `/frontend/src/pages`.
+- Reusable UI components must live in `/frontend/src/components`.
+- API logic must live in `/frontend/src/services`.
+- Shared TypeScript types must live in `/frontend/src/types`.
+- Utility functions must live in `/frontend/src/utils` when needed.
+- Keep feature logic modular and colocated by responsibility.
+
+UI and interaction rules
+- Build mobile-first responsive interfaces by default.
+- Desktop layouts should be clean scale-ups of mobile patterns.
+- Property cards must be single tap targets that navigate to `/property/:id`.
+- Do not add inline buttons inside property cards.
+- Favor accessible touch targets, readable text sizes, and consistent spacing.
+
+Safety and change management
+- Do not modify `package.json`, `vite.config.*`, or other config/build files unless explicitly instructed.
+- Do not introduce breaking architectural changes.
+- Prefer small, reusable, focused React components over large monolithic files.
+- Follow existing project conventions before introducing new patterns.
