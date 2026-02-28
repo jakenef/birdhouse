@@ -7,6 +7,7 @@ import { describe, expect, it, beforeEach, afterEach } from "vitest";
 import { ParsedPurchaseContract } from "../schemas/parsedPurchaseContract.schema";
 import { FilePropertyStore } from "./filePropertyStore";
 import { DuplicatePropertyError, PropertyStoreError } from "./propertyStore";
+import { StreetViewCacheEntry } from "../types/property";
 
 function buildParsedContract(docHash: string): ParsedPurchaseContract {
   return {
@@ -118,5 +119,91 @@ describe("FilePropertyStore", () => {
     await fs.writeFile(filePath, "{not json", "utf8");
 
     await expect(store.list()).rejects.toBeInstanceOf(PropertyStoreError);
+  });
+
+  it("accepts existing records without street view metadata", async () => {
+    await fs.mkdir(path.dirname(filePath), { recursive: true });
+    await fs.writeFile(
+      filePath,
+      JSON.stringify(
+        {
+          properties: [
+            {
+              id: "prop_1",
+              property_name: "123 Main St, Park City, UT 84060",
+              created_at_iso: "2026-02-28T00:00:00.000Z",
+              updated_at_iso: "2026-02-28T00:00:00.000Z",
+              parsed_contract: buildParsedContract("doc-1"),
+            },
+          ],
+        },
+        null,
+        2,
+      ),
+      "utf8",
+    );
+
+    const store = new FilePropertyStore(filePath);
+    await expect(store.list()).resolves.toHaveLength(1);
+  });
+
+  it("accepts existing street view cache entries from the older shape", async () => {
+    await fs.mkdir(path.dirname(filePath), { recursive: true });
+    await fs.writeFile(
+      filePath,
+      JSON.stringify(
+        {
+          properties: [
+            {
+              id: "prop_1",
+              property_name: "123 Main St, Park City, UT 84060",
+              created_at_iso: "2026-02-28T00:00:00.000Z",
+              updated_at_iso: "2026-02-28T00:00:00.000Z",
+              parsed_contract: buildParsedContract("doc-1"),
+              street_view: {
+                status: "available",
+                last_checked_at_iso: "2026-02-28T01:00:00.000Z",
+                source_address: "123 Main St, Park City, UT 84060",
+                resolved_address: "123 Main St, Park City, UT 84060, USA",
+                latitude: 40.6461,
+                longitude: -111.498,
+                pano_id: "pano-123",
+                error_message: null,
+              },
+            },
+          ],
+        },
+        null,
+        2,
+      ),
+      "utf8",
+    );
+
+    const store = new FilePropertyStore(filePath);
+    await expect(store.list()).resolves.toHaveLength(1);
+  });
+
+  it("updates street view cache metadata for an existing record", async () => {
+    const store = new FilePropertyStore(filePath);
+    const created = await store.create(buildParsedContract("doc-1"));
+    const streetView: StreetViewCacheEntry = {
+      status: "available",
+      last_checked_at_iso: "2026-02-28T01:00:00.000Z",
+      source_address: "123 Main St, Park City, UT 84060",
+      resolved_address: "123 Main St, Park City, UT 84060, USA",
+      latitude: 40.6461,
+      longitude: -111.498,
+      target_latitude: 40.6462,
+      target_longitude: -111.4978,
+      heading: 44,
+      pano_id: "pano-123",
+      error_message: null,
+    };
+
+    const updated = await store.updateStreetView(created.id, streetView);
+    const fetched = await store.findById(created.id);
+
+    expect(updated.street_view).toEqual(streetView);
+    expect(fetched?.street_view).toEqual(streetView);
   });
 });

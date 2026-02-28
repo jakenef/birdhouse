@@ -1,3 +1,355 @@
 {
-  "properties": []
+  "properties": [
+    {
+      "id": "prop_a1b2c3d4e5f6g7h8i9j0",
+      "property_name": "742 Evergreen Terrace",
+      "created_at_iso": "2026-02-20T14:30:00.000Z",
+      "updated_at_iso": "2026-02-25T09:15:00.000Z",
+      "parsed_contract": {
+        "metadata": {
+          "doc_hash": "abc123def456abc123def456abc123de",
+          "filename": "742_Evergreen_REPC.pdf",
+          "mime_type": "application/pdf",
+          "bytes": 284500,
+          "page_count": 12,
+          "extracted_at_iso": "2026-02-20T14:30:00.000Z",
+          "source": "upload",
+          "model": { "openai_model": "gpt-4.1" },
+          "confidence": {
+            "overall": 0.94,
+            "notes": "All critical fields extracted."
+          }
+        },
+        "parties": {
+          "buyers": ["Michael & Sarah Chen"],
+          "sellers": ["Robert A. Fitzgerald"]
+        },
+        "property": {
+          "address_full": "742 Evergreen Terrace",
+          "city": "Salt Lake City",
+          "state": "UT",
+          "zip": "84105"
+        },
+        "key_dates": {
+          "effective_date": "2026-02-20",
+          "due_diligence_deadline": "2026-03-06",
+          "financing_deadline": "2026-03-20",
+          "appraisal_deadline": "2026-03-25",
+          "seller_disclosure_deadline": "2026-02-27",
+          "settlement_deadline": "2026-04-15",
+          "possession": {
+            "timing": "day of recording",
+            "hours_after_recording": null,
+            "days_after_recording": 0
+          }
+        },
+        "money": {
+          "purchase_price": 425000,
+          "earnest_money": { "amount": 5000 }
+        },
+        "obligations_and_risks": {
+          "missing_info": [],
+          "time_sensitive_items": [
+            {
+              "label": "Due Diligence Deadline",
+              "due_date": "2026-03-06",
+              "urgency": "high",
+              "notes": "Schedule inspections ASAP — general, sewer, radon recommended."
+            },
+            {
+              "label": "Seller Disclosure Deadline",
+              "due_date": "2026-02-27",
+              "urgency": "medium",
+              "notes": "Seller must deliver SPDS by this date."
+            },
+            {
+              "label": "Financing Deadline",
+              "due_date": "2026-03-20",
+              "urgency": "medium",
+              "notes": "Buyer must secure loan commitment."
+            }
+          ],
+          "warnings": [
+            "Property is in a flood zone — verify insurance requirements with lender."
+          ]
+        },
+        "summary": {
+          "one_paragraph": "Michael & Sarah Chen are purchasing 742 Evergreen Terrace in Salt Lake City from Robert A. Fitzgerald for $425,000 with a $5,000 earnest money deposit. The effective date is February 20, 2026, with a due diligence deadline of March 6, financing deadline of March 20, and settlement scheduled for April 15, 2026. Possession transfers day of recording.",
+          "bullets": [
+            "Purchase price: $425,000",
+            "Earnest money: $5,000 due within 4 days of acceptance",
+            "Due diligence deadline: March 6, 2026",
+            "Financing deadline: March 20, 2026",
+            "Appraisal deadline: March 25, 2026",
+            "Settlement date: April 15, 2026",
+            "Possession: Day of recording",
+            "Property sold as-is with right to inspect"
+          ],
+          "numbers_to_know": [
+            { "label": "Purchase Price", "value": "$425,000" },
+            { "label": "Earnest Money", "value": "$5,000" },
+            { "label": "Days to Closing", "value": "47" }
+          ],
+          "recommended_next_actions": [
+            {
+              "action": "Schedule general home inspection",
+              "owner_role": "buyer",
+              "due_date": "2026-02-28"
+            },
+            {
+              "action": "Order sewer scope inspection",
+              "owner_role": "buyer",
+              "due_date": "2026-02-28"
+            },
+            {
+              "action": "Confirm earnest money deposit received",
+              "owner_role": "agent",
+              "due_date": "2026-02-24"
+            },
+            {
+              "action": "Submit loan application",
+              "owner_role": "buyer",
+              "due_date": "2026-02-25"
+            },
+            {
+              "action": "Request seller disclosures",
+              "owner_role": "agent",
+              "due_date": "2026-02-22"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "prop_k1l2m3n4o5p6q7r8s9t0",
+      "property_name": "1847 Pioneer Blvd",
+      "created_at_iso": "2026-02-15T10:00:00.000Z",
+      "updated_at_iso": "2026-02-27T16:45:00.000Z",
+      "parsed_contract": {
+        "metadata": {
+          "doc_hash": "def789ghi012def789ghi012def789gh",
+          "filename": "1847_Pioneer_REPC.pdf",
+          "mime_type": "application/pdf",
+          "bytes": 310200,
+          "page_count": 14,
+          "extracted_at_iso": "2026-02-15T10:00:00.000Z",
+          "source": "upload",
+          "model": { "openai_model": "gpt-4.1" },
+          "confidence": {
+            "overall": 0.91,
+            "notes": "Appraisal deadline inferred from financing section."
+          }
+        },
+        "parties": {
+          "buyers": ["Jessica Thornton"],
+          "sellers": ["David & Maria Lopez"]
+        },
+        "property": {
+          "address_full": "1847 Pioneer Blvd",
+          "city": "Provo",
+          "state": "UT",
+          "zip": "84601"
+        },
+        "key_dates": {
+          "effective_date": "2026-02-15",
+          "due_diligence_deadline": "2026-02-28",
+          "financing_deadline": "2026-03-15",
+          "appraisal_deadline": "2026-03-20",
+          "seller_disclosure_deadline": "2026-02-22",
+          "settlement_deadline": "2026-03-30",
+          "possession": {
+            "timing": "24 hours after recording",
+            "hours_after_recording": 24,
+            "days_after_recording": null
+          }
+        },
+        "money": {
+          "purchase_price": 315000,
+          "earnest_money": { "amount": 3000 }
+        },
+        "obligations_and_risks": {
+          "missing_info": ["HOA monthly dues amount not specified in contract"],
+          "time_sensitive_items": [
+            {
+              "label": "Due Diligence Deadline",
+              "due_date": "2026-02-28",
+              "urgency": "high",
+              "notes": "Deadline is tomorrow — confirm all inspections complete."
+            },
+            {
+              "label": "Financing Deadline",
+              "due_date": "2026-03-15",
+              "urgency": "medium",
+              "notes": "Buyer pre-approved; final commitment pending."
+            }
+          ],
+          "warnings": [
+            "HOA property — request resale package from management company.",
+            "Seller disclosure mentions past water damage in basement; inspect thoroughly."
+          ]
+        },
+        "summary": {
+          "one_paragraph": "Jessica Thornton is purchasing a condo at 1847 Pioneer Blvd in Provo from David & Maria Lopez for $315,000. Earnest money of $3,000 was deposited. Due diligence ends February 28, financing deadline is March 15, and settlement is March 30, 2026. The property is in an HOA community; resale package should be requested.",
+          "bullets": [
+            "Purchase price: $315,000",
+            "Earnest money: $3,000",
+            "Due diligence deadline: February 28, 2026",
+            "Financing deadline: March 15, 2026",
+            "Appraisal deadline: March 20, 2026",
+            "Settlement date: March 30, 2026",
+            "HOA property — resale docs needed",
+            "Past water damage disclosed by seller"
+          ],
+          "numbers_to_know": [
+            { "label": "Purchase Price", "value": "$315,000" },
+            { "label": "Earnest Money", "value": "$3,000" },
+            { "label": "Days to Closing", "value": "31" }
+          ],
+          "recommended_next_actions": [
+            {
+              "action": "Request HOA resale package",
+              "owner_role": "agent",
+              "due_date": "2026-02-20"
+            },
+            {
+              "action": "Review inspection results before deadline",
+              "owner_role": "buyer",
+              "due_date": "2026-02-28"
+            },
+            {
+              "action": "Submit final loan docs to lender",
+              "owner_role": "buyer",
+              "due_date": "2026-03-01"
+            },
+            {
+              "action": "Order appraisal",
+              "owner_role": "lender",
+              "due_date": "2026-03-05"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "prop_u1v2w3x4y5z6a7b8c9d0",
+      "property_name": "3920 Wasatch Hollow Dr",
+      "created_at_iso": "2026-02-25T18:00:00.000Z",
+      "updated_at_iso": "2026-02-26T08:30:00.000Z",
+      "parsed_contract": {
+        "metadata": {
+          "doc_hash": "ghi345jkl678ghi345jkl678ghi345jk",
+          "filename": "3920_Wasatch_Hollow_REPC.pdf",
+          "mime_type": "application/pdf",
+          "bytes": 256800,
+          "page_count": 11,
+          "extracted_at_iso": "2026-02-25T18:00:00.000Z",
+          "source": "upload",
+          "model": { "openai_model": "gpt-4.1" },
+          "confidence": {
+            "overall": 0.97,
+            "notes": "High confidence — standard Utah REPC."
+          }
+        },
+        "parties": {
+          "buyers": ["Andrew & Priya Kapoor"],
+          "sellers": ["Bridgewater Homes LLC"]
+        },
+        "property": {
+          "address_full": "3920 Wasatch Hollow Dr",
+          "city": "Draper",
+          "state": "UT",
+          "zip": "84020"
+        },
+        "key_dates": {
+          "effective_date": "2026-02-25",
+          "due_diligence_deadline": "2026-03-11",
+          "financing_deadline": "2026-04-01",
+          "appraisal_deadline": "2026-04-10",
+          "seller_disclosure_deadline": "2026-03-04",
+          "settlement_deadline": "2026-04-30",
+          "possession": {
+            "timing": "day of recording",
+            "hours_after_recording": null,
+            "days_after_recording": 0
+          }
+        },
+        "money": {
+          "purchase_price": 550000,
+          "earnest_money": { "amount": 8000 }
+        },
+        "obligations_and_risks": {
+          "missing_info": [],
+          "time_sensitive_items": [
+            {
+              "label": "Earnest Money Deposit",
+              "due_date": "2026-03-01",
+              "urgency": "high",
+              "notes": "Must be delivered to brokerage within 4 calendar days of acceptance."
+            },
+            {
+              "label": "Seller Disclosure Deadline",
+              "due_date": "2026-03-04",
+              "urgency": "medium",
+              "notes": "Seller is an LLC — confirm authorized signer for disclosures."
+            },
+            {
+              "label": "Due Diligence Deadline",
+              "due_date": "2026-03-11",
+              "urgency": "medium",
+              "notes": "New construction — request builder warranty docs during inspections."
+            }
+          ],
+          "warnings": [
+            "Seller is an LLC — verify signing authority and entity status.",
+            "New construction property — confirm certificate of occupancy before closing."
+          ]
+        },
+        "summary": {
+          "one_paragraph": "Andrew & Priya Kapoor are purchasing 3920 Wasatch Hollow Dr in Draper from Bridgewater Homes LLC for $550,000 with $8,000 in earnest money. This is a new construction property. Effective date is February 25, 2026, with inspections through March 11, financing deadline of April 1, and closing set for April 30, 2026. Seller is an LLC; signing authority and certificate of occupancy should be verified.",
+          "bullets": [
+            "Purchase price: $550,000",
+            "Earnest money: $8,000 due by March 1",
+            "Due diligence deadline: March 11, 2026",
+            "Financing deadline: April 1, 2026",
+            "Appraisal deadline: April 10, 2026",
+            "Settlement date: April 30, 2026",
+            "New construction — verify C/O before closing",
+            "Seller is LLC — confirm signing authority"
+          ],
+          "numbers_to_know": [
+            { "label": "Purchase Price", "value": "$550,000" },
+            { "label": "Earnest Money", "value": "$8,000" },
+            { "label": "Days to Closing", "value": "62" }
+          ],
+          "recommended_next_actions": [
+            {
+              "action": "Deliver earnest money to brokerage",
+              "owner_role": "buyer",
+              "due_date": "2026-03-01"
+            },
+            {
+              "action": "Verify LLC signing authority",
+              "owner_role": "agent",
+              "due_date": "2026-02-27"
+            },
+            {
+              "action": "Schedule new construction inspection",
+              "owner_role": "buyer",
+              "due_date": "2026-03-05"
+            },
+            {
+              "action": "Request builder warranty documentation",
+              "owner_role": "agent",
+              "due_date": "2026-03-05"
+            },
+            {
+              "action": "Confirm certificate of occupancy timeline",
+              "owner_role": "agent",
+              "due_date": "2026-03-15"
+            }
+          ]
+        }
+      }
+    }
+  ]
 }
