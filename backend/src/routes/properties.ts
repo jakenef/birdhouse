@@ -1,4 +1,6 @@
 import express, { Request, Response } from "express";
+import path from "path";
+import { promises as fs } from "fs";
 
 import { ParsedPurchaseContract } from "../schemas/parsedPurchaseContract.schema";
 import {
@@ -10,6 +12,7 @@ import {
   GoogleStreetViewServiceError,
   StreetViewService,
 } from "../services/googleStreetView";
+import { DocumentStore } from "../services/documentStore";
 import { StreetViewCacheEntry } from "../types/property";
 import { toPropertyCardDto } from "../utils/propertyCard";
 
@@ -17,7 +20,9 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
 
-function isParsedPurchaseContract(value: unknown): value is ParsedPurchaseContract {
+function isParsedPurchaseContract(
+  value: unknown,
+): value is ParsedPurchaseContract {
   if (!isRecord(value)) {
     return false;
   }
@@ -82,7 +87,10 @@ async function ensureStreetView(
     const refreshedStreetView = await streetViewService.lookup(
       record.parsed_contract.property,
     );
-    return await propertyStore.updateStreetView(propertyId, refreshedStreetView);
+    return await propertyStore.updateStreetView(
+      propertyId,
+      refreshedStreetView,
+    );
   } catch (error) {
     const fallback = buildStreetViewErrorEntry(
       error instanceof Error ? error.message : "Street View lookup failed.",
@@ -102,6 +110,7 @@ async function ensureStreetView(
 export function createPropertiesRouter(
   propertyStore: PropertyStore,
   streetViewService: StreetViewService,
+  documentStore: DocumentStore,
 ) {
   const router = express.Router();
 
@@ -239,7 +248,131 @@ export function createPropertiesRouter(
         res.status(500).json({
           error: {
             message:
-              error instanceof Error ? error.message : "Unexpected server error",
+              error instanceof Error
+                ? error.message
+                : "Unexpected server error",
+          },
+        });
+      }
+    },
+  );
+
+  // -------------------------------------------------------------------------
+  // GET /properties/:propertyId
+  //
+  // Returns full property detail including street view and all attached
+  // documents. Used by the frontend property detail page / documents tab.
+  //
+  // Response shape:
+  //   {
+  //     property: PropertyCardDto & {
+  //       documents: Array<{
+  //         id: string;
+  //         filename: string;
+  //         mime_type: string;
+  //         size_bytes: number | null;
+  //         source: string | null;        // "email_intake" | "manual_upload"
+  //         created_at: string;           // ISO 8601
+  //         download_url: string;         // e.g. "/api/properties/:id/documents/:docId/download"
+  //       }>
+  //     }
+  //   }
+  // -------------------------------------------------------------------------
+  router.get("/properties/:propertyId", async (req: Request, res: Response) => {
+    try {
+      const record = await ensureStreetView(
+        propertyStore,
+        streetViewService,
+        req.params.propertyId,
+      );
+
+      if (!record) {
+        res.status(404).json({
+          error: { message: "Property not found." },
+        });
+        return;
+      }
+
+      const docs = await documentStore.listByPropertyId(record.id);
+      const dto = toPropertyCardDto(record);
+
+      res.json({
+        property: {
+          ...dto,
+          documents: docs.map((doc) => ({
+            id: doc.id,
+            filename: doc.filename,
+            mime_type: doc.mime_type,
+            size_bytes: doc.size_bytes,
+            source: doc.source,
+            created_at: doc.created_at,
+            download_url: `/api/properties/${record.id}/documents/${doc.id}/download`,
+          })),
+        },
+      });
+    } catch (error) {
+      res.status(500).json({
+        error: {
+          message:
+            error instanceof Error ? error.message : "Unexpected server error",
+        },
+      });
+    }
+  });
+
+  // -------------------------------------------------------------------------
+  // GET /properties/:propertyId/documents/:docId/download
+  //
+  // Streams the raw file (PDF, etc.) for a given document.
+  // Sets Content-Type and Content-Disposition headers so the browser
+  // can display or download the file.
+  //
+  // Returns 404 if the property or document doesn't exist, or if the
+  // file is missing from disk.
+  // -------------------------------------------------------------------------
+  router.get(
+    "/properties/:propertyId/documents/:docId/download",
+    async (req: Request, res: Response) => {
+      try {
+        const doc = await documentStore.findById(req.params.docId);
+
+        if (!doc || doc.property_id !== req.params.propertyId) {
+          res.status(404).json({
+            error: { message: "Document not found." },
+          });
+          return;
+        }
+
+        // Resolve the file path (stored relative to backend/)
+        const absolutePath = path.resolve(__dirname, "../..", doc.file_path);
+
+        try {
+          await fs.access(absolutePath);
+        } catch {
+          res.status(404).json({
+            error: { message: "File not found on disk." },
+          });
+          return;
+        }
+
+        res.setHeader("Content-Type", doc.mime_type);
+        res.setHeader(
+          "Content-Disposition",
+          `inline; filename="${doc.filename}"`,
+        );
+        if (doc.size_bytes) {
+          res.setHeader("Content-Length", doc.size_bytes);
+        }
+
+        const fileBuffer = await fs.readFile(absolutePath);
+        res.send(fileBuffer);
+      } catch (error) {
+        res.status(500).json({
+          error: {
+            message:
+              error instanceof Error
+                ? error.message
+                : "Unexpected server error",
           },
         });
       }

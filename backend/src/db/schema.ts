@@ -86,3 +86,22 @@ export const processedEmails = sqliteTable("processed_emails", {
   emailId: text("email_id").primaryKey(),
   processedAt: text("processed_at").notNull(),
 });
+
+// ---------------------------------------------------------------------------
+// Documents — files (PDFs, etc.) attached to a property
+// ---------------------------------------------------------------------------
+
+export const documents = sqliteTable("documents", {
+  id: text("id").primaryKey(),
+  propertyId: text("property_id").notNull(), // FK to properties.id
+  filename: text("filename").notNull(), // original filename
+  filePath: text("file_path").notNull(), // path on disk (relative to backend/)
+  mimeType: text("mime_type").notNull(), // e.g. "application/pdf"
+  sizeBytes: integer("size_bytes"), // file size in bytes
+  docHash: text("doc_hash"), // sha256 of the file
+  source: text("source").default("email_intake"), // "email_intake" | "manual_upload"
+  createdAt: text("created_at").notNull(),
+});
+
+export type Document = typeof documents.$inferSelect;
+export type NewDocument = typeof documents.$inferInsert;

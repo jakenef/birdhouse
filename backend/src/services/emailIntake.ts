@@ -9,6 +9,7 @@ import { sha256 } from "../utils/hash";
 import { extractContractFieldsFromDocAi } from "./docai";
 import { parsePurchaseContractWithOpenAi } from "./openai";
 import { PropertyStore, DuplicatePropertyError } from "./propertyStore";
+import { DocumentStore } from "./documentStore";
 import { db } from "../db";
 import { processedEmails } from "../db/schema";
 
@@ -91,7 +92,11 @@ function canParse(): boolean {
 // Core polling logic
 // ---------------------------------------------------------------------------
 
-async function pollOnce(resend: Resend, store: PropertyStore): Promise<void> {
+async function pollOnce(
+  resend: Resend,
+  store: PropertyStore,
+  docStore: DocumentStore,
+): Promise<void> {
   const { data: listData, error: listError } =
     await resend.emails.receiving.list();
 
@@ -194,6 +199,18 @@ async function pollOnce(resend: Resend, store: PropertyStore): Promise<void> {
         });
 
         const record = await store.create(parsedContract);
+
+        // Store a document record linking the PDF to this property
+        await docStore.create({
+          propertyId: record.id,
+          filename: att.filename || "attachment.pdf",
+          filePath: `data/intake-pdfs/${savedFilename}`,
+          mimeType: "application/pdf",
+          sizeBytes: pdfBuffer.length,
+          docHash,
+          source: "email_intake",
+        });
+
         const c = parsedContract;
 
         log(
@@ -220,7 +237,10 @@ async function pollOnce(resend: Resend, store: PropertyStore): Promise<void> {
 
 let pollTimer: ReturnType<typeof setInterval> | null = null;
 
-export function startEmailPolling(store: PropertyStore): void {
+export function startEmailPolling(
+  store: PropertyStore,
+  docStore: DocumentStore,
+): void {
   const apiKey = process.env.RESEND_API_KEY;
 
   if (!apiKey || apiKey.trim().length === 0) {
@@ -235,12 +255,12 @@ export function startEmailPolling(store: PropertyStore): void {
   );
 
   // Run immediately, then on interval
-  pollOnce(resend, store).catch((err) =>
+  pollOnce(resend, store, docStore).catch((err) =>
     log(`poll error: ${err instanceof Error ? err.message : String(err)}`),
   );
 
   pollTimer = setInterval(() => {
-    pollOnce(resend, store).catch((err) =>
+    pollOnce(resend, store, docStore).catch((err) =>
       log(`poll error: ${err instanceof Error ? err.message : String(err)}`),
     );
   }, POLL_INTERVAL_MS);
