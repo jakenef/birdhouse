@@ -26,7 +26,9 @@ function formatPrice(value: number): string {
 }
 
 function formatDate(isoDate: string): string {
-  const parsed = new Date(isoDate);
+  // Append noon time to date-only strings to avoid UTC→local timezone shift
+  const normalized = isoDate.includes("T") ? isoDate : `${isoDate}T12:00:00`;
+  const parsed = new Date(normalized);
   if (Number.isNaN(parsed.getTime())) {
     return "TBD";
   }
@@ -67,7 +69,10 @@ export function PropertyCard({ deal, onOpenDeal }: PropertyCardProps) {
       onClick={() => onOpenDeal(deal.id)}
       aria-label={`Open property deal for ${deal.address}`}
     >
-      <div className="deal-card__media" style={{ backgroundImage: `url(${deal.imageUrl})` }}>
+      <div
+        className="deal-card__media"
+        style={{ backgroundImage: `url(${deal.imageUrl})` }}
+      >
         <div className="deal-card__media-overlay" />
         <div className="deal-card__pill-row">
           <span className={statusToneClass(deal.status)}>{deal.status}</span>
@@ -88,18 +93,24 @@ export function PropertyCard({ deal, onOpenDeal }: PropertyCardProps) {
       <dl className="deal-card__summary">
         <div>
           <dt>Offer</dt>
-          <dd className="deal-card__value deal-card__value--price">{formatPrice(deal.offerPrice)}</dd>
+          <dd className="deal-card__value deal-card__value--price">
+            {formatPrice(deal.offerPrice)}
+          </dd>
         </div>
         <div>
           <dt>Started</dt>
-          <dd className="deal-card__value deal-card__value--date">{formatDate(deal.startedDateIso)}</dd>
+          <dd className="deal-card__value deal-card__value--date">
+            {formatDate(deal.startedDateIso)}
+          </dd>
         </div>
         <div>
           <dt>
             <CalendarIcon />
             Close
           </dt>
-          <dd className="deal-card__value deal-card__value--date">{formatDate(deal.closeDateIso)}</dd>
+          <dd className="deal-card__value deal-card__value--date">
+            {formatDate(deal.closeDateIso)}
+          </dd>
         </div>
       </dl>
     </button>

@@ -1,5 +1,10 @@
 import type { Deal, UrgencyTone } from "../types/deal";
 
+type ApiStreetView = {
+  status: string;
+  image_url: string | null;
+};
+
 type ApiProperty = {
   id: string;
   property_name: string;
@@ -12,6 +17,7 @@ type ApiProperty = {
   settlement_deadline: string | null;
   created_at_iso: string;
   updated_at_iso: string;
+  street_view?: ApiStreetView;
 };
 
 type ApiPropertiesResponse = {
@@ -133,7 +139,9 @@ function isApiProperty(value: unknown): value is ApiProperty {
   );
 }
 
-function isApiPropertiesResponse(value: unknown): value is ApiPropertiesResponse {
+function isApiPropertiesResponse(
+  value: unknown,
+): value is ApiPropertiesResponse {
   if (!isRecord(value) || !Array.isArray(value.properties)) {
     return false;
   }
@@ -143,7 +151,8 @@ function isApiPropertiesResponse(value: unknown): value is ApiPropertiesResponse
 
 function daysUntil(isoDate: string): number {
   const now = Date.now();
-  const target = new Date(isoDate).getTime();
+  const normalized = isoDate.includes("T") ? isoDate : `${isoDate}T12:00:00`;
+  const target = new Date(normalized).getTime();
   if (Number.isNaN(target)) {
     return 10;
   }
@@ -152,7 +161,8 @@ function daysUntil(isoDate: string): number {
 }
 
 function addDaysIso(isoDate: string, days: number): string {
-  const base = new Date(isoDate);
+  const normalized = isoDate.includes("T") ? isoDate : `${isoDate}T12:00:00`;
+  const base = new Date(normalized);
   if (Number.isNaN(base.getTime())) {
     return new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString();
   }
@@ -190,19 +200,28 @@ function formatCityState(
   state: string | null,
   zip: string | null,
 ): string {
-  const location = [city, state].filter((value): value is string => Boolean(value?.trim()));
+  const location = [city, state].filter((value): value is string =>
+    Boolean(value?.trim()),
+  );
   const cityState = location.join(", ");
   if (!cityState && !zip) {
     return "Location unavailable";
   }
 
-  return [cityState, zip].filter((value): value is string => Boolean(value)).join(" ");
+  return [cityState, zip]
+    .filter((value): value is string => Boolean(value))
+    .join(" ");
 }
 
 function mapApiPropertyToDeal(property: ApiProperty, index: number): Deal {
-  const imageUrl = DEAL_IMAGES[index % DEAL_IMAGES.length];
+  const imageUrl =
+    property.street_view?.status === "available" &&
+    property.street_view.image_url
+      ? property.street_view.image_url
+      : DEAL_IMAGES[index % DEAL_IMAGES.length];
   const closeDateIso =
-    property.settlement_deadline && property.settlement_deadline.trim().length > 0
+    property.settlement_deadline &&
+    property.settlement_deadline.trim().length > 0
       ? property.settlement_deadline
       : addDaysIso(property.created_at_iso, 30).slice(0, 10);
   const startedDateIso =
@@ -247,7 +266,8 @@ export async function fetchDeals(): Promise<Deal[]> {
       .map((property, index) => mapApiPropertyToDeal(property, index))
       .sort(
         (a, b) =>
-          new Date(b.updatedAtIso).getTime() - new Date(a.updatedAtIso).getTime(),
+          new Date(b.updatedAtIso).getTime() -
+          new Date(a.updatedAtIso).getTime(),
       );
   } catch {
     return [...MOCK_DEALS];
