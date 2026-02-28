@@ -6,11 +6,18 @@ import multer from "multer";
 
 import { parseRouter } from "./routes/parse";
 import { createPropertiesRouter } from "./routes/properties";
+import { FilePropertyStore } from "./services/filePropertyStore";
+import { GoogleStreetViewService } from "./services/googleStreetView";
 import { DrizzlePropertyStore } from "./services/drizzlePropertyStore";
 import { startEmailPolling } from "./services/emailIntake";
 
 const app = express();
 const port = Number(process.env.PORT || "3001");
+const propertyStore = new FilePropertyStore(
+  process.env.MOCK_PROPERTIES_DB_PATH ||
+    path.resolve(process.cwd(), "data", "mock-properties.json"),
+);
+const streetViewService = new GoogleStreetViewService();
 const propertyStore = new DrizzlePropertyStore();
 
 app.use(cors());
@@ -25,7 +32,7 @@ app.get("/health", (_req: Request, res: Response) => {
 });
 
 app.use("/api", parseRouter);
-app.use("/api", createPropertiesRouter(propertyStore));
+app.use("/api", createPropertiesRouter(propertyStore, streetViewService));
 
 app.use((error: unknown, _req: Request, res: Response, _next: NextFunction) => {
   if (error instanceof multer.MulterError && error.code === "LIMIT_FILE_SIZE") {
@@ -58,6 +65,7 @@ app.listen(port, () => {
       health_url: `http://localhost:${port}/health`,
       parse_url: `http://localhost:${port}/api/parse`,
       properties_url: `http://localhost:${port}/api/properties`,
+      property_street_view_url: `http://localhost:${port}/api/properties/:propertyId/street-view`,
     }),
   );
 });

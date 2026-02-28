@@ -1,77 +1,104 @@
-import { useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+
+import { BottomNav, type AppTab } from "./components/BottomNav";
+import { Alerts } from "./pages/Alerts";
+import { Home } from "./pages/Home";
+import { PropertyDetail } from "./pages/PropertyDetail";
+import { Settings } from "./pages/Settings";
 import "./App.css";
 
-interface HealthResponse {
-  status: string;
-  timestamp: number;
-  message: string;
+function getCurrentPath(): string {
+  if (!window.location.pathname || window.location.pathname === "") {
+    return "/";
+  }
+
+  return window.location.pathname;
+}
+
+function getDealIdFromPath(path: string): string | null {
+  if (!path.startsWith("/property/")) {
+    return null;
+  }
+
+  const segment = path.replace("/property/", "").trim();
+  if (!segment) {
+    return null;
+  }
+
+  return decodeURIComponent(segment);
+}
+
+function getTabFromPath(path: string): AppTab {
+  if (path.startsWith("/alerts")) {
+    return "alerts";
+  }
+
+  if (path.startsWith("/settings")) {
+    return "settings";
+  }
+
+  return "home";
 }
 
 function App() {
-  const [healthStatus, setHealthStatus] = useState<string>("");
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string>("");
+  const [path, setPath] = useState<string>(() => getCurrentPath());
 
-  const checkHealth = async () => {
-    setLoading(true);
-    setError("");
-    setHealthStatus("");
+  useEffect(() => {
+    const handlePopState = () => setPath(getCurrentPath());
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, []);
 
-    try {
-      const response = await fetch("http://localhost:3001/health");
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+  const navigate = useCallback(
+    (nextPath: string) => {
+      if (nextPath === path) {
+        return;
       }
 
-      const data: HealthResponse = await response.json();
-      setHealthStatus(
-        `✅ Backend is healthy! Status: ${data.status} - ${data.message}`,
-      );
-    } catch (err) {
-      setError(
-        `❌ Failed to connect to backend: ${err instanceof Error ? err.message : "Unknown error"}`,
-      );
-    } finally {
-      setLoading(false);
+      window.history.pushState({}, "", nextPath);
+      setPath(nextPath);
+      window.scrollTo({ top: 0, behavior: "auto" });
+    },
+    [path],
+  );
+
+  const activeTab = useMemo(() => getTabFromPath(path), [path]);
+  const activeDealId = useMemo(() => getDealIdFromPath(path), [path]);
+
+  const handleTabChange = (tab: AppTab) => {
+    if (tab === "home") {
+      navigate("/");
+      return;
     }
+
+    if (tab === "alerts") {
+      navigate("/alerts");
+      return;
+    }
+
+    navigate("/settings");
+  };
+
+  const renderActivePage = () => {
+    if (activeDealId) {
+      return <PropertyDetail dealId={activeDealId} onBack={() => navigate("/")} />;
+    }
+
+    if (activeTab === "alerts") {
+      return <Alerts />;
+    }
+
+    if (activeTab === "settings") {
+      return <Settings />;
+    }
+
+    return <Home onOpenDeal={(dealId) => navigate(`/property/${encodeURIComponent(dealId)}`)} />;
   };
 
   return (
-    <div className="app">
-      <h1>🏠 Birdhouse</h1>
-      <p>Contract-to-close transaction manager</p>
-
-      <div className="card">
-        <button
-          onClick={checkHealth}
-          disabled={loading}
-          style={{
-            padding: "12px 24px",
-            fontSize: "16px",
-            cursor: loading ? "not-allowed" : "pointer",
-            backgroundColor: loading ? "#ccc" : "#646cff",
-            color: "white",
-            border: "none",
-            borderRadius: "8px",
-            fontWeight: "500",
-          }}
-        >
-          {loading ? "Checking..." : "Check Backend Health"}
-        </button>
-
-        {healthStatus && (
-          <p style={{ color: "#4ade80", marginTop: "16px", fontSize: "14px" }}>
-            {healthStatus}
-          </p>
-        )}
-
-        {error && (
-          <p style={{ color: "#ef4444", marginTop: "16px", fontSize: "14px" }}>
-            {error}
-          </p>
-        )}
-      </div>
+    <div className="app-shell">
+      <main className="app-main">{renderActivePage()}</main>
+      <BottomNav activeTab={activeTab} onTabChange={handleTabChange} />
     </div>
   );
 }

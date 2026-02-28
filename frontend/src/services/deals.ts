@@ -1,0 +1,260 @@
+import type { Deal, UrgencyTone } from "../types/deal";
+
+type ApiProperty = {
+  id: string;
+  property_name: string;
+  address_full: string | null;
+  city: string | null;
+  state: string | null;
+  zip: string | null;
+  purchase_price: number | null;
+  effective_date: string | null;
+  settlement_deadline: string | null;
+  created_at_iso: string;
+  updated_at_iso: string;
+};
+
+type ApiPropertiesResponse = {
+  properties: ApiProperty[];
+};
+
+const DEAL_IMAGES = [
+  "https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?auto=format&fit=crop&w=1400&q=80",
+  "https://images.unsplash.com/photo-1600566753086-00f18fb6b3ea?auto=format&fit=crop&w=1400&q=80",
+  "https://images.unsplash.com/photo-1600585154526-990dced4db0d?auto=format&fit=crop&w=1400&q=80",
+  "https://images.unsplash.com/photo-1600047509807-ba8f99d2cdde?auto=format&fit=crop&w=1400&q=80",
+  "https://images.unsplash.com/photo-1600607687644-c7f34b5b4dcd?auto=format&fit=crop&w=1400&q=80",
+  "https://images.unsplash.com/photo-1572120360610-d971b9d7767c?auto=format&fit=crop&w=1400&q=80",
+];
+
+const MOCK_DEALS: Deal[] = [
+  {
+    id: "deal-maple-ridge",
+    address: "4821 Maple Ridge Dr",
+    cityState: "Austin, TX 78701",
+    imageUrl: DEAL_IMAGES[0],
+    status: "Under Contract",
+    urgencyLabel: "4d to close",
+    urgencyTone: "critical",
+    offerPrice: 485000,
+    closeDateIso: "2026-03-14",
+    startedDateIso: "2026-01-12",
+    updatedAtIso: "2026-02-27T20:00:00.000Z",
+    nextAction: "Review final walkthrough packet before close.",
+  },
+  {
+    id: "deal-sycamore",
+    address: "2204 Sycamore St",
+    cityState: "Nashville, TN 37201",
+    imageUrl: DEAL_IMAGES[1],
+    status: "Closing",
+    urgencyLabel: "1d to close",
+    urgencyTone: "critical",
+    offerPrice: 540000,
+    closeDateIso: "2026-03-07",
+    startedDateIso: "2025-12-20",
+    updatedAtIso: "2026-02-27T19:00:00.000Z",
+    nextAction: "Confirm wire instructions with title company.",
+  },
+  {
+    id: "deal-westfield",
+    address: "102 Westfield Ave",
+    cityState: "Denver, CO 80203",
+    imageUrl: DEAL_IMAGES[2],
+    status: "Due Diligence",
+    urgencyLabel: "Due soon",
+    urgencyTone: "warning",
+    offerPrice: 620000,
+    closeDateIso: "2026-03-28",
+    startedDateIso: "2026-02-01",
+    updatedAtIso: "2026-02-27T16:00:00.000Z",
+    nextAction: "Collect HOA documents and upload disclosures.",
+  },
+  {
+    id: "deal-pinecrest",
+    address: "89 Pinecrest Ave",
+    cityState: "Salt Lake City, UT 84103",
+    imageUrl: DEAL_IMAGES[3],
+    status: "Under Contract",
+    urgencyLabel: "6d to close",
+    urgencyTone: "critical",
+    offerPrice: 455000,
+    closeDateIso: "2026-03-16",
+    startedDateIso: "2026-01-30",
+    updatedAtIso: "2026-02-27T14:00:00.000Z",
+    nextAction: "Finalize inspection response addendum.",
+  },
+  {
+    id: "deal-harbor",
+    address: "14 Harbor View Pl",
+    cityState: "Seattle, WA 98109",
+    imageUrl: DEAL_IMAGES[4],
+    status: "Due Diligence",
+    urgencyLabel: "Due soon",
+    urgencyTone: "warning",
+    offerPrice: 735000,
+    closeDateIso: "2026-04-03",
+    startedDateIso: "2026-02-04",
+    updatedAtIso: "2026-02-27T12:00:00.000Z",
+    nextAction: "Order sewer scope and schedule appraisal.",
+  },
+  {
+    id: "deal-brighton",
+    address: "301 Brighton Lane",
+    cityState: "Scottsdale, AZ 85251",
+    imageUrl: DEAL_IMAGES[5],
+    status: "Under Contract",
+    urgencyLabel: "8d to close",
+    urgencyTone: "warning",
+    offerPrice: 510000,
+    closeDateIso: "2026-03-18",
+    startedDateIso: "2026-01-25",
+    updatedAtIso: "2026-02-27T09:00:00.000Z",
+    nextAction: "Confirm tenant estoppel and lease amendments.",
+  },
+];
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function isApiProperty(value: unknown): value is ApiProperty {
+  if (!isRecord(value)) {
+    return false;
+  }
+
+  return (
+    typeof value.id === "string" &&
+    typeof value.property_name === "string" &&
+    "purchase_price" in value &&
+    "settlement_deadline" in value &&
+    typeof value.created_at_iso === "string" &&
+    typeof value.updated_at_iso === "string"
+  );
+}
+
+function isApiPropertiesResponse(value: unknown): value is ApiPropertiesResponse {
+  if (!isRecord(value) || !Array.isArray(value.properties)) {
+    return false;
+  }
+
+  return value.properties.every((property) => isApiProperty(property));
+}
+
+function daysUntil(isoDate: string): number {
+  const now = Date.now();
+  const target = new Date(isoDate).getTime();
+  if (Number.isNaN(target)) {
+    return 10;
+  }
+
+  return Math.max(1, Math.ceil((target - now) / (1000 * 60 * 60 * 24)));
+}
+
+function addDaysIso(isoDate: string, days: number): string {
+  const base = new Date(isoDate);
+  if (Number.isNaN(base.getTime())) {
+    return new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString();
+  }
+
+  base.setDate(base.getDate() + days);
+  return base.toISOString();
+}
+
+function urgencyFromDays(days: number): { label: string; tone: UrgencyTone } {
+  if (days <= 2) {
+    return { label: `${days}d to close`, tone: "critical" };
+  }
+
+  if (days <= 8) {
+    return { label: `${days}d to close`, tone: "warning" };
+  }
+
+  return { label: "Due soon", tone: "warning" };
+}
+
+function statusFromDays(days: number): string {
+  if (days <= 2) {
+    return "Closing";
+  }
+
+  if (days <= 14) {
+    return "Under Contract";
+  }
+
+  return "Due Diligence";
+}
+
+function formatCityState(
+  city: string | null,
+  state: string | null,
+  zip: string | null,
+): string {
+  const location = [city, state].filter((value): value is string => Boolean(value?.trim()));
+  const cityState = location.join(", ");
+  if (!cityState && !zip) {
+    return "Location unavailable";
+  }
+
+  return [cityState, zip].filter((value): value is string => Boolean(value)).join(" ");
+}
+
+function mapApiPropertyToDeal(property: ApiProperty, index: number): Deal {
+  const imageUrl = DEAL_IMAGES[index % DEAL_IMAGES.length];
+  const closeDateIso =
+    property.settlement_deadline && property.settlement_deadline.trim().length > 0
+      ? property.settlement_deadline
+      : addDaysIso(property.created_at_iso, 30).slice(0, 10);
+  const startedDateIso =
+    property.effective_date && property.effective_date.trim().length > 0
+      ? property.effective_date
+      : property.created_at_iso.slice(0, 10);
+  const daysToClose = daysUntil(closeDateIso);
+  const urgency = urgencyFromDays(daysToClose);
+
+  return {
+    id: property.id,
+    address: property.address_full || property.property_name,
+    cityState: formatCityState(property.city, property.state, property.zip),
+    imageUrl,
+    status: statusFromDays(daysToClose),
+    urgencyLabel: urgency.label,
+    urgencyTone: urgency.tone,
+    offerPrice: property.purchase_price ?? 0,
+    closeDateIso,
+    startedDateIso,
+    updatedAtIso: property.updated_at_iso,
+    nextAction:
+      daysToClose <= 3
+        ? "Confirm title docs and closing disclosures."
+        : "Review timeline and clear remaining contingencies.",
+  };
+}
+
+export async function fetchDeals(): Promise<Deal[]> {
+  try {
+    const response = await fetch("/api/properties");
+    if (!response.ok) {
+      throw new Error(`Failed to load deals: ${response.status}`);
+    }
+
+    const payload: unknown = await response.json();
+    if (!isApiPropertiesResponse(payload)) {
+      throw new Error("Invalid properties response.");
+    }
+
+    return payload.properties
+      .map((property, index) => mapApiPropertyToDeal(property, index))
+      .sort(
+        (a, b) =>
+          new Date(b.updatedAtIso).getTime() - new Date(a.updatedAtIso).getTime(),
+      );
+  } catch {
+    return [...MOCK_DEALS];
+  }
+}
+
+export async function fetchDealById(dealId: string): Promise<Deal | null> {
+  const deals = await fetchDeals();
+  return deals.find((deal) => deal.id === dealId) ?? null;
+}
