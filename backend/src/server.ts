@@ -4,6 +4,8 @@ import express, { NextFunction, Request, Response } from "express";
 import multer from "multer";
 
 import { parseRouter } from "./routes/parse";
+import { propertiesRouter } from "./routes/properties";
+import { seedProperties } from "./db/seed";
 
 const requiredEnvVars = [
   "GOOGLE_CLOUD_PROJECT_ID",
@@ -40,6 +42,7 @@ app.get("/health", (_req: Request, res: Response) => {
 });
 
 app.use("/api", parseRouter);
+app.use("/api/properties", propertiesRouter);
 
 app.use(
   (error: unknown, _req: Request, res: Response, _next: NextFunction) => {
@@ -63,13 +66,17 @@ app.use(
   },
 );
 
-app.listen(port, () => {
+app.listen(port, async () => {
+  // Seed sample data in dev
+  await seedProperties();
+
   console.log(
     JSON.stringify({
       event: "server_started",
       port,
       health_url: `http://localhost:${port}/health`,
       parse_url: `http://localhost:${port}/api/parse`,
+      properties_url: `http://localhost:${port}/api/properties`,
     }),
   );
 });
