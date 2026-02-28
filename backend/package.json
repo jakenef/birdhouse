@@ -4,7 +4,7 @@
   "description": "Backend API for Birdhouse transaction manager",
   "main": "dist/server.js",
   "scripts": {
-    "dev": "ts-node src/server.ts",
+    "dev": "drizzle-kit push && ts-node src/server.ts",
     "build": "tsc",
     "start": "node dist/server.js",
     "test": "vitest run",
