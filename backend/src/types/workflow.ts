@@ -12,6 +12,8 @@ export type PipelineLabel =
   | "title_escrow"
   | "closing";
 
+export type PipelineClassificationLabel = PipelineLabel | "unknown";
+
 export type WorkflowStepState = {
   label: PipelineLabel;
   status: PipelineStepStatus;
@@ -38,6 +40,28 @@ export type EarnestDraftState = {
   last_error: string | null;
 };
 
+export type EarnestPendingUserAction =
+  | "none"
+  | "send_earnest_email"
+  | "confirm_wire_sent"
+  | "confirm_earnest_complete";
+
+export type EarnestAgentSuggestion = {
+  pending_user_action: EarnestPendingUserAction;
+  prompt_to_user: string | null;
+  evidence_message_id: string | null;
+  evidence_thread_id: string | null;
+  latest_summary: string | null;
+  latest_confidence: number | null;
+  latest_reason: string | null;
+  latest_pipeline_label: PipelineClassificationLabel;
+  latest_earnest_signal:
+    | "none"
+    | "wire_instructions_provided"
+    | "earnest_received_confirmation";
+  updated_at_iso: string | null;
+};
+
 export type PropertyWorkflowState = {
   version: 1;
   current_label: PipelineLabel;
@@ -51,6 +75,6 @@ export type PropertyWorkflowState = {
   };
   earnest: {
     draft: EarnestDraftState;
-    prompt_to_user: string | null;
+    suggestion: EarnestAgentSuggestion;
   };
 };

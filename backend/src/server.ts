@@ -9,10 +9,11 @@ import { createPropertiesRouter } from "./routes/properties";
 import { createContactsRouter } from "./routes/contacts";
 import { ContactStore } from "./services/contactStore";
 import { EarnestWorkflowService } from "./services/earnestWorkflow";
+import { EarnestInboxAutomation } from "./services/earnestInboxAutomation";
 import { GoogleStreetViewService } from "./services/googleStreetView";
 import { DrizzlePropertyStore } from "./services/drizzlePropertyStore";
 import { DocumentStore } from "./services/documentStore";
-import { PropertyEmailSender } from "./services/propertyEmailSender";
+import { OutboundEmailService } from "./services/outboundEmailService";
 import { InboxStore } from "./services/inboxStore";
 import { startEmailPolling } from "./services/emailIntake";
 
@@ -23,12 +24,16 @@ const documentStore = new DocumentStore();
 const inboxStore = new InboxStore();
 const streetViewService = new GoogleStreetViewService();
 const contactStore = new ContactStore();
-const propertyEmailSender = new PropertyEmailSender();
+const outboundEmailService = new OutboundEmailService(inboxStore);
 const earnestWorkflowService = new EarnestWorkflowService(
   propertyStore,
   documentStore,
   contactStore,
-  propertyEmailSender,
+  outboundEmailService,
+);
+const earnestInboxAutomation = new EarnestInboxAutomation(
+  inboxStore,
+  earnestWorkflowService,
 );
 
 app.use(cors());
@@ -46,13 +51,13 @@ app.use("/api", parseRouter);
 app.use(
   "/api",
   createPropertiesRouter(
-    propertyStore,
-    streetViewService,
-    documentStore,
-    earnestWorkflowService,
-    propertyEmailSender,
-    inboxStore,
-  ),
+      propertyStore,
+      streetViewService,
+      documentStore,
+      earnestWorkflowService,
+      outboundEmailService,
+      inboxStore,
+    ),
 );
 app.use("/api", createContactsRouter(contactStore));
 
@@ -83,6 +88,7 @@ app.listen(port, () => {
     documentStore,
     earnestWorkflowService,
     inboxStore,
+    earnestInboxAutomation,
   );
 
   console.log(

@@ -7,7 +7,7 @@ import {
   EarnestWorkflowService,
 } from "./earnestWorkflow";
 import { generateEarnestDraft } from "./earnestDraftGenerator";
-import { PropertyEmailSender } from "./propertyEmailSender";
+import { OutboundEmailService } from "./outboundEmailService";
 import { PropertyStore } from "./propertyStore";
 import { StoredPropertyRecord, StreetViewCacheEntry } from "../types/property";
 import { PropertyWorkflowState } from "../types/workflow";
@@ -169,7 +169,7 @@ describe("EarnestWorkflowService", () => {
   let propertyStore: InMemoryPropertyStore;
   let documentStore: InMemoryDocumentStore;
   let contactStore: ContactStore;
-  let propertyEmailSender: PropertyEmailSender;
+  let outboundEmailService: OutboundEmailService;
   let service: EarnestWorkflowService;
 
   beforeEach(() => {
@@ -177,12 +177,23 @@ describe("EarnestWorkflowService", () => {
     propertyStore = new InMemoryPropertyStore();
     documentStore = new InMemoryDocumentStore();
     contactStore = new ContactStore();
-    propertyEmailSender = new PropertyEmailSender();
+    outboundEmailService = {
+      send: vi.fn().mockResolvedValue({
+        inbox_message_id: "im_123",
+        resend_email_id: "resend_123",
+        thread_id: "thread_123",
+        message_id: "<outbound-123@example.com>",
+        sent_at: "2026-02-28T00:20:00.000Z",
+        from: "200-promenade@demo.test",
+        to: ["sarah@titleco.com"],
+        subject: "Earnest Money - Edited",
+      }),
+    } as unknown as OutboundEmailService;
     service = new EarnestWorkflowService(
       propertyStore,
       documentStore as unknown as DocumentStore,
       contactStore,
-      propertyEmailSender,
+      outboundEmailService,
     );
   });
 
@@ -262,7 +273,84 @@ describe("EarnestWorkflowService", () => {
 
     expect(earnest.step_status).toBe("waiting_for_parties");
     expect(earnest.draft.subject).toBe("Earnest Money - Edited");
-    expect(earnest.send_state.message_id).toBeTruthy();
+    expect(earnest.send_state.message_id).toBe("im_123");
     expect(earnest.send_state.thread_id).toBeTruthy();
+  });
+
+  it("prompts the user to confirm wire sent after a high-confidence wiring email", async () => {
+    const earnest = await service.applyInboxAnalysis("prop_1", "im_wire", "thr_wire", {
+      version: 1,
+      pipeline_label: "earnest_money",
+      summary: "Escrow sent secure wiring instructions.",
+      confidence: 0.92,
+      reason: "The email explicitly provides wiring instructions.",
+      earnest_signal: "wire_instructions_provided",
+      suggested_user_action: "confirm_wire_sent",
+      warnings: [],
+      analyzed_at_iso: "2026-02-28T01:00:00.000Z",
+    });
+
+    expect(earnest.step_status).toBe("action_needed");
+    expect(earnest.pending_user_action).toBe("confirm_wire_sent");
+    expect(earnest.latest_email_analysis.earnest_signal).toBe(
+      "wire_instructions_provided",
+    );
+  });
+
+  it("returns to waiting_for_parties when the user confirms the wire was sent", async () => {
+    await service.applyInboxAnalysis("prop_1", "im_wire", "thr_wire", {
+      version: 1,
+      pipeline_label: "earnest_money",
+      summary: "Escrow sent secure wiring instructions.",
+      confidence: 0.92,
+      reason: "The email explicitly provides wiring instructions.",
+      earnest_signal: "wire_instructions_provided",
+      suggested_user_action: "confirm_wire_sent",
+      warnings: [],
+      analyzed_at_iso: "2026-02-28T01:00:00.000Z",
+    });
+
+    const earnest = await service.confirmWireSent("prop_1");
+
+    expect(earnest.step_status).toBe("waiting_for_parties");
+    expect(earnest.pending_user_action).toBe("none");
+  });
+
+  it("allows receipt confirmation to supersede the earlier wire prompt and complete earnest", async () => {
+    await service.applyInboxAnalysis("prop_1", "im_wire", "thr_wire", {
+      version: 1,
+      pipeline_label: "earnest_money",
+      summary: "Escrow sent secure wiring instructions.",
+      confidence: 0.92,
+      reason: "The email explicitly provides wiring instructions.",
+      earnest_signal: "wire_instructions_provided",
+      suggested_user_action: "confirm_wire_sent",
+      warnings: [],
+      analyzed_at_iso: "2026-02-28T01:00:00.000Z",
+    });
+
+    const receiptPrompt = await service.applyInboxAnalysis(
+      "prop_1",
+      "im_receipt",
+      "thr_wire",
+      {
+        version: 1,
+        pipeline_label: "earnest_money",
+        summary: "Escrow confirmed earnest was received.",
+        confidence: 0.96,
+        reason: "The email says the earnest money deposit was received.",
+        earnest_signal: "earnest_received_confirmation",
+        suggested_user_action: "confirm_earnest_complete",
+        warnings: [],
+        analyzed_at_iso: "2026-02-28T02:00:00.000Z",
+      },
+    );
+
+    expect(receiptPrompt.pending_user_action).toBe("confirm_earnest_complete");
+    expect(receiptPrompt.latest_email_analysis.message_id).toBe("im_receipt");
+
+    const completed = await service.confirmComplete("prop_1");
+    expect(completed.step_status).toBe("completed");
+    expect(completed.pending_user_action).toBe("none");
   });
 });

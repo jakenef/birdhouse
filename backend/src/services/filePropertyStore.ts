@@ -63,6 +63,7 @@ function isPropertyWorkflowState(value: unknown): value is PropertyWorkflowState
   const steps = workflow.steps as Record<string, unknown> | undefined;
   const earnest = workflow.earnest as Record<string, unknown> | undefined;
   const draft = earnest?.draft as Record<string, unknown> | undefined;
+  const suggestion = earnest?.suggestion as Record<string, unknown> | undefined;
 
   return (
     workflow.version === 1 &&
@@ -83,9 +84,26 @@ function isPropertyWorkflowState(value: unknown): value is PropertyWorkflowState
       },
     ) &&
     !!earnest &&
-    (earnest.prompt_to_user === null || typeof earnest.prompt_to_user === "string") &&
     !!draft &&
-    typeof draft.status === "string"
+    typeof draft.status === "string" &&
+    !!suggestion &&
+    typeof suggestion.pending_user_action === "string" &&
+    (suggestion.prompt_to_user === null ||
+      typeof suggestion.prompt_to_user === "string") &&
+    (suggestion.evidence_message_id === null ||
+      typeof suggestion.evidence_message_id === "string") &&
+    (suggestion.evidence_thread_id === null ||
+      typeof suggestion.evidence_thread_id === "string") &&
+    (suggestion.latest_summary === null ||
+      typeof suggestion.latest_summary === "string") &&
+    (suggestion.latest_confidence === null ||
+      typeof suggestion.latest_confidence === "number") &&
+    (suggestion.latest_reason === null ||
+      typeof suggestion.latest_reason === "string") &&
+    typeof suggestion.latest_pipeline_label === "string" &&
+    typeof suggestion.latest_earnest_signal === "string" &&
+    (suggestion.updated_at_iso === null ||
+      typeof suggestion.updated_at_iso === "string")
   );
 }
 

@@ -47,7 +47,8 @@ const CREATE_INBOX_MESSAGES = `
     read INTEGER DEFAULT 0,
     sent_at TEXT NOT NULL,
     read_at TEXT,
-    created_at TEXT NOT NULL
+    created_at TEXT NOT NULL,
+    analysis_json TEXT
   )
 `;
 
@@ -126,6 +127,7 @@ describe("InboxStore", () => {
       expect(msg.body_text).toBe("Hello world");
       expect(msg.sent_at).toBe("2026-02-28T12:00:00.000Z");
       expect(msg.created_at).toBeTruthy();
+      expect(msg.analysis).toBeNull();
     });
 
     it("assigns a thread_id via subject-based fallback", async () => {
@@ -428,6 +430,31 @@ describe("InboxStore", () => {
 
     it("returns null for unknown message", async () => {
       expect(await store.markRead("im_missing", true)).toBeNull();
+    });
+  });
+
+  describe("analysis", () => {
+    it("stores and returns message analysis", async () => {
+      const msg = await store.createMessage(makeInput());
+
+      await store.updateAnalysis(msg.id, {
+        version: 1,
+        pipeline_label: "earnest_money",
+        summary: "Escrow provided wiring instructions.",
+        confidence: 0.92,
+        reason: "Explicit wiring instructions were attached to the email.",
+        earnest_signal: "wire_instructions_provided",
+        suggested_user_action: "confirm_wire_sent",
+        warnings: [],
+        analyzed_at_iso: "2026-02-28T12:05:00.000Z",
+      });
+
+      const updated = await store.findById(msg.id);
+      expect(updated?.analysis?.pipeline_label).toBe("earnest_money");
+      expect(updated?.analysis?.earnest_signal).toBe(
+        "wire_instructions_provided",
+      );
+      expect(await store.getAnalysis(msg.id)).toEqual(updated?.analysis);
     });
   });
 });

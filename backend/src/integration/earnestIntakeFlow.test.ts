@@ -10,10 +10,10 @@ import { EarnestWorkflowService } from "../services/earnestWorkflow";
 import { generateEarnestDraft } from "../services/earnestDraftGenerator";
 import { StreetViewService } from "../services/googleStreetView";
 import {
-  PropertyEmailSender,
-  SendPropertyEmailInput,
-  SendPropertyEmailResult,
-} from "../services/propertyEmailSender";
+  OutboundEmailService,
+  SendOutboundEmailInput,
+  SendOutboundEmailResult,
+} from "../services/outboundEmailService";
 import { PropertyStore } from "../services/propertyStore";
 import { StoredPropertyRecord, StreetViewCacheEntry } from "../types/property";
 import { PropertyWorkflowState } from "../types/workflow";
@@ -129,14 +129,20 @@ class StubStreetViewService implements StreetViewService {
   }
 }
 
-class SpyPropertyEmailSender extends PropertyEmailSender {
-  lastSendInput: SendPropertyEmailInput | null = null;
+class SpyPropertyEmailSender extends OutboundEmailService {
+  lastSendInput: SendOutboundEmailInput | null = null;
 
-  async send(input: SendPropertyEmailInput): Promise<SendPropertyEmailResult> {
+  constructor() {
+    super({} as any);
+  }
+
+  async send(input: SendOutboundEmailInput): Promise<SendOutboundEmailResult> {
     this.lastSendInput = input;
     return {
-      id: "msg_test_1",
+      inbox_message_id: "im_test_1",
+      resend_email_id: "resend_test_1",
       thread_id: "thread_test_1",
+      message_id: "<outbound-test@example.com>",
       sent_at: "2026-02-28T00:20:00.000Z",
       from: input.from,
       to: input.to,
@@ -240,7 +246,7 @@ describe("earnest intake flow integration", () => {
 
     expect(sendResponse.status).toBe(201);
     expect(sendResponse.body.earnest.step_status).toBe("waiting_for_parties");
-    expect(sendResponse.body.earnest.send_state.message_id).toBe("msg_test_1");
+    expect(sendResponse.body.earnest.send_state.message_id).toBe("im_test_1");
     expect(sendResponse.body.earnest.send_state.thread_id).toBe("thread_test_1");
 
     expect(propertyEmailSender.lastSendInput).toMatchObject({
@@ -261,7 +267,7 @@ describe("earnest intake flow integration", () => {
       "haydenkpeterson@gmail.com",
     );
     expect(persistedWorkflowState?.earnest.draft.sent_message_id).toBe(
-      "msg_test_1",
+      "im_test_1",
     );
   });
 
@@ -370,5 +376,76 @@ describe("earnest intake flow integration", () => {
     expect(sendResponse.status).toBe(201);
     expect(propertyEmailSender.lastSendInput?.subject).toBe("Edited Earnest Subject");
     expect(propertyEmailSender.lastSendInput?.body).toContain("Edited body.");
+  });
+
+  it("runs the full earnest lane from inbound wiring email to completion confirmation", async () => {
+    vi.mocked(generateEarnestDraft).mockResolvedValue({
+      subject: "Earnest Money - 6119 W Montauk Ln",
+      body: "Hi Hayden Peterson,\n\nPlease send wiring instructions.\n\nThank you,\nJohn Smith",
+      generation_reason: "Simple earnest request using contract details.",
+      openai_model: "gpt-4.1",
+    });
+
+    await request(app).post("/api/contacts").send({
+      type: "escrow_officer",
+      name: "Hayden Peterson",
+      email: "haydenkpeterson@gmail.com",
+    });
+
+    await request(app).post(`/api/properties/${propertyId}/pipeline/earnest/prepare`);
+    await request(app)
+      .post(`/api/properties/${propertyId}/pipeline/earnest/send`)
+      .send({
+        subject: "Earnest Money - 6119 W Montauk Ln",
+        body: "Hi Hayden Peterson,\n\nPlease send wiring instructions.\n\nThank you,\nJohn Smith",
+      });
+
+    await earnestWorkflowService.applyInboxAnalysis(propertyId, "im_wire", "thr_earnest", {
+      version: 1,
+      pipeline_label: "earnest_money",
+      summary: "Escrow sent wiring instructions and will confirm once funds are received.",
+      confidence: 0.94,
+      reason: "The email explicitly provides wiring instructions and says receipt will be confirmed later.",
+      earnest_signal: "wire_instructions_provided",
+      suggested_user_action: "confirm_wire_sent",
+      warnings: [],
+      analyzed_at_iso: "2026-02-28T00:25:00.000Z",
+    });
+
+    const wirePrompt = await request(app).get(
+      `/api/properties/${propertyId}/pipeline/earnest`,
+    );
+    expect(wirePrompt.body.earnest.step_status).toBe("action_needed");
+    expect(wirePrompt.body.earnest.pending_user_action).toBe("confirm_wire_sent");
+
+    const waitingAgain = await request(app).post(
+      `/api/properties/${propertyId}/pipeline/earnest/confirm-wire-sent`,
+    );
+    expect(waitingAgain.body.earnest.step_status).toBe("waiting_for_parties");
+
+    await earnestWorkflowService.applyInboxAnalysis(propertyId, "im_receipt", "thr_earnest", {
+      version: 1,
+      pipeline_label: "earnest_money",
+      summary: "Escrow confirmed the earnest money deposit was received.",
+      confidence: 0.97,
+      reason: "The email says the earnest money deposit was received and the buyer is all set.",
+      earnest_signal: "earnest_received_confirmation",
+      suggested_user_action: "confirm_earnest_complete",
+      warnings: [],
+      analyzed_at_iso: "2026-02-28T00:30:00.000Z",
+    });
+
+    const completionPrompt = await request(app).get(
+      `/api/properties/${propertyId}/pipeline/earnest`,
+    );
+    expect(completionPrompt.body.earnest.pending_user_action).toBe(
+      "confirm_earnest_complete",
+    );
+
+    const completed = await request(app).post(
+      `/api/properties/${propertyId}/pipeline/earnest/confirm-complete`,
+    );
+    expect(completed.body.earnest.step_status).toBe("completed");
+    expect(completed.body.earnest.pending_user_action).toBe("none");
   });
 });

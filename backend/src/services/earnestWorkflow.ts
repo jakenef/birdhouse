@@ -5,11 +5,16 @@ import {
   generateEarnestDraft,
 } from "./earnestDraftGenerator";
 import {
-  PropertyEmailSender,
-  SendPropertyEmailResult,
-} from "./propertyEmailSender";
+  OutboundEmailService,
+  SendOutboundEmailResult,
+} from "./outboundEmailService";
 import { PropertyStore } from "./propertyStore";
-import { PropertyWorkflowState } from "../types/workflow";
+import {
+  EarnestPendingUserAction,
+  PipelineClassificationLabel,
+  PropertyWorkflowState,
+} from "../types/workflow";
+import { EarnestInboundSignal, InboxMessageAnalysis } from "../types/inbox";
 
 export type EarnestStepView = {
   property_id: string;
@@ -17,6 +22,7 @@ export type EarnestStepView = {
   current_label: "earnest_money";
   step_status: "locked" | "action_needed" | "waiting_for_parties" | "completed";
   locked_reason: string | null;
+  pending_user_action: EarnestPendingUserAction;
   prompt_to_user: string | null;
   contact: {
     type: "escrow_officer";
@@ -39,6 +45,15 @@ export type EarnestStepView = {
     thread_id: string | null;
     message_id: string | null;
     sent_at_iso: string | null;
+  };
+  latest_email_analysis: {
+    message_id: string | null;
+    thread_id: string | null;
+    pipeline_label: PipelineClassificationLabel;
+    summary: string | null;
+    confidence: number | null;
+    reason: string | null;
+    earnest_signal: EarnestInboundSignal;
   };
 };
 
@@ -64,6 +79,21 @@ function createStep(
     locked_reason: status === "locked" ? reason : null,
     last_transition_at_iso: nowIso(),
     last_transition_reason: reason,
+  };
+}
+
+function createEmptySuggestion() {
+  return {
+    pending_user_action: "none" as const,
+    prompt_to_user: null,
+    evidence_message_id: null,
+    evidence_thread_id: null,
+    latest_summary: null,
+    latest_confidence: null,
+    latest_reason: null,
+    latest_pipeline_label: "unknown" as const,
+    latest_earnest_signal: "none" as const,
+    updated_at_iso: null,
   };
 }
 
@@ -113,13 +143,27 @@ export function createInitialWorkflowState(): PropertyWorkflowState {
         sent_at_iso: null,
         last_error: null,
       },
-      prompt_to_user: null,
+      suggestion: createEmptySuggestion(),
     },
   };
 }
 
 function cloneWorkflowState(workflowState: PropertyWorkflowState): PropertyWorkflowState {
   return JSON.parse(JSON.stringify(workflowState)) as PropertyWorkflowState;
+}
+
+function setSuggestion(
+  workflowState: PropertyWorkflowState,
+  values: Partial<PropertyWorkflowState["earnest"]["suggestion"]>,
+) {
+  workflowState.earnest.suggestion = {
+    ...workflowState.earnest.suggestion,
+    ...values,
+  };
+}
+
+function resetSuggestion(workflowState: PropertyWorkflowState) {
+  workflowState.earnest.suggestion = createEmptySuggestion();
 }
 
 function withEarnestLocked(
@@ -138,7 +182,11 @@ function withEarnestLocked(
     last_transition_at_iso: nowIso(),
     last_transition_reason: lockedReason,
   };
-  next.earnest.prompt_to_user = promptToUser;
+  setSuggestion(next, {
+    pending_user_action: "none",
+    prompt_to_user: promptToUser,
+    updated_at_iso: nowIso(),
+  });
   next.earnest.draft = {
     ...next.earnest.draft,
     status: "missing",
@@ -151,6 +199,9 @@ function withEarnestLocked(
     attachment_filename: null,
     openai_model: null,
     generation_reason: null,
+    thread_id: null,
+    sent_message_id: null,
+    sent_at_iso: null,
     last_error: lastError,
   };
 
@@ -165,6 +216,7 @@ function toEarnestView(
 ): EarnestStepView {
   const draft = workflowState.earnest.draft;
   const step = workflowState.steps.earnest_money;
+  const suggestion = workflowState.earnest.suggestion;
 
   return {
     property_id: propertyId,
@@ -172,7 +224,8 @@ function toEarnestView(
     current_label: "earnest_money",
     step_status: step.status,
     locked_reason: step.locked_reason,
-    prompt_to_user: workflowState.earnest.prompt_to_user,
+    pending_user_action: suggestion.pending_user_action,
+    prompt_to_user: suggestion.prompt_to_user,
     contact:
       contact
         ? {
@@ -207,6 +260,15 @@ function toEarnestView(
       message_id: draft.sent_message_id,
       sent_at_iso: draft.sent_at_iso,
     },
+    latest_email_analysis: {
+      message_id: suggestion.evidence_message_id,
+      thread_id: suggestion.evidence_thread_id,
+      pipeline_label: suggestion.latest_pipeline_label,
+      summary: suggestion.latest_summary,
+      confidence: suggestion.latest_confidence,
+      reason: suggestion.latest_reason,
+      earnest_signal: suggestion.latest_earnest_signal,
+    },
   };
 }
 
@@ -226,8 +288,7 @@ function buildDraftContext(
     property_address: property.parsed_contract.property.address_full,
     buyer_names: property.parsed_contract.parties.buyers,
     earnest_money_amount: property.parsed_contract.money.earnest_money.amount,
-    earnest_money_deadline:
-      null,
+    earnest_money_deadline: null,
     escrow_contact: {
       name: contact.name,
       email: contact.email,
@@ -242,7 +303,7 @@ export class EarnestWorkflowService {
     private readonly propertyStore: PropertyStore,
     private readonly documentStore: DocumentStore,
     private readonly contactStore: ContactStore,
-    private readonly propertyEmailSender: PropertyEmailSender,
+    private readonly outboundEmailService: OutboundEmailService,
   ) {}
 
   private async loadPropertyOrThrow(propertyId: string) {
@@ -272,11 +333,11 @@ export class EarnestWorkflowService {
       return matching;
     }
 
-    const pdfDocuments = [...documents]
+    const oldestPdf = [...documents]
       .filter((document) => document.mime_type === "application/pdf")
       .reverse();
 
-    return pdfDocuments[0] || null;
+    return oldestPdf[0] || null;
   }
 
   async prepareEarnestStep(propertyId: string): Promise<EarnestStepView> {
@@ -296,8 +357,9 @@ export class EarnestWorkflowService {
     }
 
     if (
-      workflowState.steps.earnest_money.status === "action_needed" &&
-      workflowState.earnest.draft.status === "ready"
+      workflowState.steps.earnest_money.status === "completed" ||
+      (workflowState.steps.earnest_money.status === "action_needed" &&
+        workflowState.earnest.draft.status === "ready")
     ) {
       return toEarnestView(
         property.id,
@@ -348,7 +410,11 @@ export class EarnestWorkflowService {
         last_transition_at_iso: nowIso(),
         last_transition_reason: "Earnest draft is ready to send.",
       };
-      next.earnest.prompt_to_user = null;
+      setSuggestion(next, {
+        pending_user_action: "send_earnest_email",
+        prompt_to_user: null,
+        updated_at_iso: nowIso(),
+      });
       next.earnest.draft = {
         ...next.earnest.draft,
         status: "ready",
@@ -406,7 +472,10 @@ export class EarnestWorkflowService {
     }
 
     const workflowState = await this.resolveWorkflowState(propertyId);
-    if (workflowState.steps.earnest_money.status !== "action_needed") {
+    if (
+      workflowState.steps.earnest_money.status !== "action_needed" ||
+      workflowState.earnest.suggestion.pending_user_action !== "send_earnest_email"
+    ) {
       throw new EarnestWorkflowError(
         "Earnest draft can only be sent when the step is action_needed.",
       );
@@ -427,7 +496,7 @@ export class EarnestWorkflowService {
       throw new EarnestWorkflowError("Purchase contract attachment is missing.");
     }
 
-    const sent = await this.propertyEmailSender.send({
+    const sent = await this.outboundEmailService.send({
       property_id: property.id,
       from: property.property_email,
       to: [contact.email],
@@ -439,6 +508,7 @@ export class EarnestWorkflowService {
           document_id: attachment.id,
           filename: attachment.filename,
           mime_type: attachment.mime_type,
+          file_path: attachment.file_path,
         },
       ],
     });
@@ -449,10 +519,152 @@ export class EarnestWorkflowService {
     return toEarnestView(updated.id, updated.property_email, next, contact);
   }
 
+  async applyInboxAnalysis(
+    propertyId: string,
+    messageId: string,
+    threadId: string,
+    analysis: InboxMessageAnalysis,
+  ): Promise<EarnestStepView> {
+    const property = await this.loadPropertyOrThrow(propertyId);
+    const workflowState = await this.resolveWorkflowState(propertyId);
+    const next = cloneWorkflowState(workflowState);
+
+    setSuggestion(next, {
+      evidence_message_id: messageId,
+      evidence_thread_id: threadId,
+      latest_summary: analysis.summary,
+      latest_confidence: analysis.confidence,
+      latest_reason: analysis.reason,
+      latest_pipeline_label: analysis.pipeline_label,
+      latest_earnest_signal: analysis.earnest_signal,
+      updated_at_iso: analysis.analyzed_at_iso,
+    });
+
+    if (
+      next.steps.earnest_money.status !== "completed" &&
+      analysis.confidence >= 0.8
+    ) {
+      if (analysis.earnest_signal === "wire_instructions_provided") {
+        next.current_label = "earnest_money";
+        next.steps.earnest_money = {
+          label: "earnest_money",
+          status: "action_needed",
+          locked_reason: null,
+          last_transition_at_iso: analysis.analyzed_at_iso,
+          last_transition_reason: "Escrow sent wiring instructions.",
+        };
+        setSuggestion(next, {
+          pending_user_action: "confirm_wire_sent",
+          prompt_to_user:
+            "Escrow sent wiring instructions. Send the earnest money, then confirm once you have initiated the transfer.",
+        });
+      }
+
+      if (analysis.earnest_signal === "earnest_received_confirmation") {
+        next.current_label = "earnest_money";
+        next.steps.earnest_money = {
+          label: "earnest_money",
+          status: "action_needed",
+          locked_reason: null,
+          last_transition_at_iso: analysis.analyzed_at_iso,
+          last_transition_reason: "Escrow appears to have received the earnest money.",
+        };
+        setSuggestion(next, {
+          pending_user_action: "confirm_earnest_complete",
+          prompt_to_user:
+            "Escrow appears to have received the earnest money deposit. Confirm to mark Earnest complete.",
+        });
+      }
+    }
+
+    const updated = await this.propertyStore.updateWorkflowState(property.id, next);
+    return toEarnestView(
+      updated.id,
+      updated.property_email,
+      next,
+      this.contactStore.getByType("escrow_officer"),
+    );
+  }
+
+  async confirmWireSent(propertyId: string): Promise<EarnestStepView> {
+    const property = await this.loadPropertyOrThrow(propertyId);
+    const workflowState = await this.resolveWorkflowState(propertyId);
+
+    if (
+      workflowState.steps.earnest_money.status !== "action_needed" ||
+      workflowState.earnest.suggestion.pending_user_action !== "confirm_wire_sent"
+    ) {
+      throw new EarnestWorkflowError(
+        "Earnest wire can only be confirmed when the step is waiting for buyer action.",
+      );
+    }
+
+    const next = cloneWorkflowState(workflowState);
+    next.current_label = "earnest_money";
+    next.steps.earnest_money = {
+      label: "earnest_money",
+      status: "waiting_for_parties",
+      locked_reason: null,
+      last_transition_at_iso: nowIso(),
+      last_transition_reason: "Buyer confirmed earnest wire was sent.",
+    };
+    setSuggestion(next, {
+      pending_user_action: "none",
+      prompt_to_user: null,
+      updated_at_iso: nowIso(),
+    });
+
+    const updated = await this.propertyStore.updateWorkflowState(property.id, next);
+    return toEarnestView(
+      updated.id,
+      updated.property_email,
+      next,
+      this.contactStore.getByType("escrow_officer"),
+    );
+  }
+
+  async confirmComplete(propertyId: string): Promise<EarnestStepView> {
+    const property = await this.loadPropertyOrThrow(propertyId);
+    const workflowState = await this.resolveWorkflowState(propertyId);
+
+    if (
+      workflowState.steps.earnest_money.status !== "action_needed" ||
+      workflowState.earnest.suggestion.pending_user_action !==
+        "confirm_earnest_complete"
+    ) {
+      throw new EarnestWorkflowError(
+        "Earnest can only be completed when escrow receipt confirmation is pending user approval.",
+      );
+    }
+
+    const next = cloneWorkflowState(workflowState);
+    next.current_label = "earnest_money";
+    next.steps.earnest_money = {
+      label: "earnest_money",
+      status: "completed",
+      locked_reason: null,
+      last_transition_at_iso: nowIso(),
+      last_transition_reason: "Buyer confirmed earnest is complete.",
+    };
+    setSuggestion(next, {
+      pending_user_action: "none",
+      prompt_to_user: null,
+      updated_at_iso: nowIso(),
+    });
+
+    const updated = await this.propertyStore.updateWorkflowState(property.id, next);
+    return toEarnestView(
+      updated.id,
+      updated.property_email,
+      next,
+      this.contactStore.getByType("escrow_officer"),
+    );
+  }
+
   private applySendResult(
     workflowState: PropertyWorkflowState,
     contact: NonNullable<ReturnType<ContactStore["getByType"]>>,
-    sent: SendPropertyEmailResult,
+    sent: SendOutboundEmailResult,
     input: {
       subject: string;
       body: string;
@@ -469,7 +681,11 @@ export class EarnestWorkflowService {
       last_transition_at_iso: sent.sent_at,
       last_transition_reason: "Earnest kickoff email sent.",
     };
-    next.earnest.prompt_to_user = null;
+    setSuggestion(next, {
+      pending_user_action: "none",
+      prompt_to_user: null,
+      updated_at_iso: sent.sent_at,
+    });
     next.earnest.draft = {
       ...next.earnest.draft,
       status: "sent",
@@ -478,7 +694,7 @@ export class EarnestWorkflowService {
       recipient_email: contact.email,
       recipient_name: contact.name,
       thread_id: sent.thread_id,
-      sent_message_id: sent.id,
+      sent_message_id: sent.inbox_message_id,
       sent_at_iso: sent.sent_at,
       last_error: null,
     };

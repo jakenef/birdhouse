@@ -10,7 +10,7 @@ import {
 } from "../services/earnestWorkflow";
 import { StreetViewService } from "../services/googleStreetView";
 import { InboxStore } from "../services/inboxStore";
-import { PropertyEmailSender } from "../services/propertyEmailSender";
+import { OutboundEmailService } from "../services/outboundEmailService";
 import {
   DuplicatePropertyError,
   PropertyStore,
@@ -189,8 +189,10 @@ class StubDocumentStore {
 class StubPropertyEmailSender {
   async send(input: { from: string; to: string[]; subject: string }) {
     return {
-      id: "msg_123",
-      thread_id: "thread_123",
+      inbox_message_id: "im_123",
+      resend_email_id: "resend_123",
+      thread_id: "thr_123",
+      message_id: null,
       sent_at: "2026-02-28T00:20:00.000Z",
       from: input.from,
       to: input.to,
@@ -262,6 +264,7 @@ class StubEarnestWorkflowService {
       locked_reason: "Escrow officer contact is missing.",
       prompt_to_user:
         "Add your escrow officer contact to prepare the earnest email.",
+      pending_user_action: "none" as const,
       contact: null,
       attachment: null,
       draft: {
@@ -276,6 +279,15 @@ class StubEarnestWorkflowService {
         message_id: null,
         sent_at_iso: null,
       },
+      latest_email_analysis: {
+        message_id: null,
+        thread_id: null,
+        pipeline_label: "unknown" as const,
+        summary: null,
+        confidence: null,
+        reason: null,
+        earnest_signal: "none" as const,
+      },
     };
   }
 
@@ -287,6 +299,7 @@ class StubEarnestWorkflowService {
       step_status: "action_needed" as const,
       locked_reason: null,
       prompt_to_user: null,
+      pending_user_action: "send_earnest_email" as const,
       contact: {
         type: "escrow_officer" as const,
         name: "Sarah Chen",
@@ -309,6 +322,15 @@ class StubEarnestWorkflowService {
         message_id: null,
         sent_at_iso: null,
       },
+      latest_email_analysis: {
+        message_id: null,
+        thread_id: null,
+        pipeline_label: "unknown" as const,
+        summary: null,
+        confidence: null,
+        reason: null,
+        earnest_signal: "none" as const,
+      },
     };
   }
 
@@ -329,6 +351,7 @@ class StubEarnestWorkflowService {
       step_status: "waiting_for_parties" as const,
       locked_reason: null,
       prompt_to_user: null,
+      pending_user_action: "none" as const,
       contact: {
         type: "escrow_officer" as const,
         name: "Sarah Chen",
@@ -346,10 +369,36 @@ class StubEarnestWorkflowService {
         generation_reason: "Simple earnest draft.",
       },
       send_state: {
-        thread_id: "thread_123",
-        message_id: "msg_123",
+        thread_id: "thr_123",
+        message_id: "im_123",
         sent_at_iso: "2026-02-28T00:20:00.000Z",
       },
+      latest_email_analysis: {
+        message_id: null,
+        thread_id: null,
+        pipeline_label: "unknown" as const,
+        summary: null,
+        confidence: null,
+        reason: null,
+        earnest_signal: "none" as const,
+      },
+    };
+  }
+
+  async confirmWireSent(propertyId: string) {
+    return this.sendEarnestDraft(propertyId, {
+      subject: "ignored",
+      body: "ignored",
+    });
+  }
+
+  async confirmComplete(propertyId: string) {
+    return {
+      ...(await this.sendEarnestDraft(propertyId, {
+        subject: "ignored",
+        body: "ignored",
+      })),
+      step_status: "completed" as const,
     };
   }
 }
@@ -395,7 +444,7 @@ describe("properties routes", () => {
         new StubStreetViewService(),
         new StubDocumentStore() as unknown as DocumentStore,
         new StubEarnestWorkflowService() as unknown as EarnestWorkflowService,
-        new StubPropertyEmailSender() as unknown as PropertyEmailSender,
+        new StubPropertyEmailSender() as unknown as OutboundEmailService,
         new StubInboxStore() as unknown as InboxStore,
       ),
     );
@@ -513,6 +562,10 @@ describe("properties routes", () => {
 
     expect(response.status).toBe(200);
     expect(response.body.earnest.step_status).toBe("locked");
+    expect(response.body.earnest.pending_user_action).toBe("none");
+    expect(response.body.earnest.latest_email_analysis.pipeline_label).toBe(
+      "unknown",
+    );
   });
 
   it("prepares the earnest draft", async () => {
@@ -563,7 +616,33 @@ describe("properties routes", () => {
 
     expect(response.status).toBe(201);
     expect(response.body.earnest.step_status).toBe("waiting_for_parties");
-    expect(response.body.earnest.send_state.message_id).toBe("msg_123");
+    expect(response.body.earnest.send_state.message_id).toBe("im_123");
+  });
+
+  it("confirms wire sent through the earnest route", async () => {
+    await request(app)
+      .post("/api/properties")
+      .send(buildParsedContract("doc-1"));
+
+    const response = await request(app).post(
+      "/api/properties/prop_1/pipeline/earnest/confirm-wire-sent",
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.body.earnest.step_status).toBe("waiting_for_parties");
+  });
+
+  it("confirms earnest complete through the earnest route", async () => {
+    await request(app)
+      .post("/api/properties")
+      .send(buildParsedContract("doc-1"));
+
+    const response = await request(app).post(
+      "/api/properties/prop_1/pipeline/earnest/confirm-complete",
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.body.earnest.step_status).toBe("completed");
   });
 
   it("uses the shared mocked sender for inbox send", async () => {

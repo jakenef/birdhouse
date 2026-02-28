@@ -5,6 +5,10 @@ const contactEmail =
   process.env.CONTACT_EMAIL || "haydenkpeterson@gmail.com";
 const sendDraft =
   String(process.env.SEND_DRAFT || "").toLowerCase() === "true";
+const confirmWireSent =
+  String(process.env.CONFIRM_WIRE_SENT || "").toLowerCase() === "true";
+const confirmComplete =
+  String(process.env.CONFIRM_COMPLETE || "").toLowerCase() === "true";
 
 async function requestJson(url, options = {}) {
   const response = await fetch(url, options);
@@ -58,6 +62,7 @@ async function main() {
   );
 
   console.log("Earnest status:", prepared.earnest.step_status);
+  console.log("Pending user action:", prepared.earnest.pending_user_action);
   console.log("Earnest contact:", prepared.earnest.contact);
   console.log("Earnest attachment:", prepared.earnest.attachment);
   console.log("Draft subject:");
@@ -88,13 +93,38 @@ async function main() {
   );
 
   console.log("Post-send earnest status:", sent.earnest.step_status);
+  console.log("Pending user action:", sent.earnest.pending_user_action);
   console.log("Recipient email:", sent.earnest.contact?.email || null);
   console.log("Sender email:", sent.earnest.property_email);
   console.log("Message ID:", sent.earnest.send_state.message_id);
   console.log("Thread ID:", sent.earnest.send_state.thread_id);
-  console.log(
-    "Mock send only: this confirms backend targeting, not real Gmail delivery.",
-  );
+  console.log("This uses the real backend outbound path. Delivery still depends on your Resend setup.");
+
+  if (confirmWireSent) {
+    const wireConfirmed = await requestJson(
+      `${baseUrl}/api/properties/${propertyId}/pipeline/earnest/confirm-wire-sent`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      },
+    );
+    console.log("After confirm-wire-sent:", wireConfirmed.earnest.step_status);
+  }
+
+  if (confirmComplete) {
+    const completeConfirmed = await requestJson(
+      `${baseUrl}/api/properties/${propertyId}/pipeline/earnest/confirm-complete`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      },
+    );
+    console.log("After confirm-complete:", completeConfirmed.earnest.step_status);
+  }
 }
 
 async function resolvePropertyId() {

@@ -1,7 +1,6 @@
 import express, { Request, Response } from "express";
 import path from "path";
 import { promises as fs } from "fs";
-import { Resend } from "resend";
 
 import { ParsedPurchaseContract } from "../schemas/parsedPurchaseContract.schema";
 import {
@@ -18,11 +17,8 @@ import {
   EarnestWorkflowService,
 } from "../services/earnestWorkflow";
 import { DocumentStore } from "../services/documentStore";
-import {
-  PropertyEmailSender,
-  SendPropertyEmailInput,
-} from "../services/propertyEmailSender";
 import { InboxStore } from "../services/inboxStore";
+import { OutboundEmailService, OutboundEmailServiceError } from "../services/outboundEmailService";
 import { StreetViewCacheEntry } from "../types/property";
 import { toPropertyCardDto } from "../utils/propertyCard";
 
@@ -122,7 +118,7 @@ export function createPropertiesRouter(
   streetViewService: StreetViewService,
   documentStore: DocumentStore,
   earnestWorkflowService: EarnestWorkflowService,
-  propertyEmailSender: PropertyEmailSender,
+  outboundEmailService: OutboundEmailService,
   inboxStore: InboxStore,
 ) {
   const router = express.Router();
@@ -515,6 +511,16 @@ export function createPropertiesRouter(
           sent_at: msg.sent_at,
           read: msg.read,
           direction: msg.direction,
+          analysis: msg.analysis
+            ? {
+                pipeline_label: msg.analysis.pipeline_label,
+                summary: msg.analysis.summary,
+                confidence: msg.analysis.confidence,
+                reason: msg.analysis.reason,
+                earnest_signal: msg.analysis.earnest_signal,
+                suggested_user_action: msg.analysis.suggested_user_action,
+              }
+            : null,
         }));
 
         res.json({
@@ -594,7 +600,9 @@ export function createPropertiesRouter(
   // -------------------------------------------------------------------------
   // POST /properties/:propertyId/inbox/send
   //
-  // Sends an email FROM the property's email address via Resend API.
+  // Sends an email FROM the property's email address via the shared outbound
+  // email service. This keeps generic inbox send and workflow-driven send
+  // on the same real transport + inbox storage path.
   // -------------------------------------------------------------------------
   router.post(
     "/properties/:propertyId/inbox/send",
@@ -650,94 +658,39 @@ export function createPropertiesRouter(
           return;
         }
 
-        // Build threading headers if replying
-        let inReplyToHeader: string | undefined;
-        const referencesArr: string[] = [];
-
-        if (reply_to_message_id) {
-          const parentMsg = await inboxStore.findById(reply_to_message_id);
-          if (parentMsg && parentMsg.message_id) {
-            inReplyToHeader = parentMsg.message_id;
-            const parentRefs = parentMsg.references || [];
-            referencesArr.push(...parentRefs, parentMsg.message_id);
-          }
-        }
-
-        // Send via Resend API
-        const resendApiKey = process.env.RESEND_API_KEY;
-        if (!resendApiKey) {
-          res.status(500).json({
-            error: { message: "RESEND_API_KEY is not configured." },
-          });
-          return;
-        }
-
-        const resend = new Resend(resendApiKey);
-        const { data: emailResult, error: sendError } =
-          await resend.emails.send({
-            from: property.property_email,
-            to,
-            cc: cc ?? undefined,
-            subject,
-            text: body,
-            html: body_html ?? undefined,
-            headers: {
-              ...(inReplyToHeader ? { "In-Reply-To": inReplyToHeader } : {}),
-              ...(referencesArr.length > 0
-                ? { References: referencesArr.join(" ") }
-                : {}),
-            },
-          });
-
-        if (sendError || !emailResult) {
-          console.error("[inbox send] Resend API error:", sendError);
-          res.status(502).json({
-            error: {
-              message: sendError?.message ?? "Failed to send email via Resend.",
-            },
-          });
-          return;
-        }
-
-        // Store in inbox
-        const toArr = to.map((addr: string) => ({
-          email: addr,
-          name: null,
-        }));
-        const ccArr = (cc ?? []).map((addr: string) => ({
-          email: addr,
-          name: null,
-        }));
-
-        const storedMessage = await inboxStore.createMessage({
-          resendEmailId: emailResult.id,
-          propertyId: property.id,
-          direction: "outbound",
-          fromEmail: property.property_email,
-          fromName: null,
-          to: toArr,
-          cc: ccArr,
+        const sent = await outboundEmailService.send({
+          property_id: property.id,
+          from: property.property_email,
+          to,
+          cc,
+          bcc,
           subject,
-          bodyText: body,
-          bodyHtml: body_html ?? null,
-          messageId: null,
-          inReplyTo: inReplyToHeader ?? null,
-          references: referencesArr,
-          hasAttachments: false,
-          sentAt: new Date().toISOString(),
+          body,
+          body_html: body_html ?? null,
+          reply_to_message_id:
+            typeof reply_to_message_id === "string" ? reply_to_message_id : null,
         });
 
         res.status(201).json({
           message: {
-            id: storedMessage.id,
-            thread_id: storedMessage.thread_id,
-            sent_at: storedMessage.sent_at,
+            id: sent.inbox_message_id,
+            thread_id: sent.thread_id,
+            sent_at: sent.sent_at,
             from: property.property_email,
             to,
             subject,
           },
         });
       } catch (error) {
+        if (error instanceof OutboundEmailServiceError) {
+          res.status(502).json({
+            error: {
+              message: error.message,
+            },
+          });
+          return;
+        }
+
         res.status(500).json({
           error: {
             message:
@@ -750,6 +703,19 @@ export function createPropertiesRouter(
     },
   );
 
+  // -------------------------------------------------------------------------
+  // GET /properties/:propertyId/pipeline/earnest
+  //
+  // Frontend contract for the Earnest step UI:
+  // - `step_status` is the primary state machine value
+  // - `pending_user_action` tells the UI which CTA to render
+  // - `prompt_to_user` is the human-readable instruction
+  // - `latest_email_analysis` explains why the backend is prompting
+  //
+  // This is an Earnest-specific endpoint, not a full multi-step pipeline
+  // payload. The UI can build the Earnest step now, but should not assume a
+  // generic whole-pipeline endpoint exists yet.
+  // -------------------------------------------------------------------------
   router.get(
     "/properties/:propertyId/pipeline/earnest",
     async (req: Request, res: Response) => {
@@ -776,6 +742,8 @@ export function createPropertiesRouter(
     },
   );
 
+  // Idempotent Earnest preparation endpoint. The frontend can call this when
+  // the user lands on the Earnest step or after missing setup data is fixed.
   router.post(
     "/properties/:propertyId/pipeline/earnest/prepare",
     async (req: Request, res: Response) => {
@@ -802,6 +770,8 @@ export function createPropertiesRouter(
     },
   );
 
+  // Sends the Earnest kickoff email. The frontend may edit subject/body before
+  // posting here. After success, Earnest moves to `waiting_for_parties`.
   router.post(
     "/properties/:propertyId/pipeline/earnest/send",
     async (req: Request, res: Response) => {
@@ -839,6 +809,61 @@ export function createPropertiesRouter(
         );
 
         res.status(201).json({ earnest });
+      } catch (error) {
+        if (error instanceof EarnestWorkflowError) {
+          sendEarnestWorkflowError(res, error);
+          return;
+        }
+
+        res.status(500).json({
+          error: {
+            message:
+              error instanceof Error
+                ? error.message
+                : "Unexpected server error",
+          },
+        });
+      }
+    },
+  );
+
+  // User confirms they manually sent the earnest wire after escrow provided
+  // instructions. This moves Earnest back to `waiting_for_parties`.
+  router.post(
+    "/properties/:propertyId/pipeline/earnest/confirm-wire-sent",
+    async (req: Request, res: Response) => {
+      try {
+        const earnest = await earnestWorkflowService.confirmWireSent(
+          req.params.propertyId,
+        );
+        res.json({ earnest });
+      } catch (error) {
+        if (error instanceof EarnestWorkflowError) {
+          sendEarnestWorkflowError(res, error);
+          return;
+        }
+
+        res.status(500).json({
+          error: {
+            message:
+              error instanceof Error
+                ? error.message
+                : "Unexpected server error",
+          },
+        });
+      }
+    },
+  );
+
+  // User confirms escrow receipt should mark Earnest complete.
+  router.post(
+    "/properties/:propertyId/pipeline/earnest/confirm-complete",
+    async (req: Request, res: Response) => {
+      try {
+        const earnest = await earnestWorkflowService.confirmComplete(
+          req.params.propertyId,
+        );
+        res.json({ earnest });
       } catch (error) {
         if (error instanceof EarnestWorkflowError) {
           sendEarnestWorkflowError(res, error);

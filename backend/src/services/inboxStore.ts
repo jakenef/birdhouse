@@ -3,6 +3,7 @@ import { eq, and, desc, or, sql } from "drizzle-orm";
 
 import { db } from "../db";
 import { inboxMessages, type NewInboxMessage } from "../db/schema";
+import { InboxMessageAnalysis } from "../types/inbox";
 import { normalizeSubject, subjectThreadId } from "../utils/emailThreading";
 
 // ---------------------------------------------------------------------------
@@ -31,6 +32,7 @@ export interface StoredInboxMessage {
   sent_at: string;
   read_at: string | null;
   created_at: string;
+  analysis: InboxMessageAnalysis | null;
 }
 
 export interface InboxThread {
@@ -93,6 +95,17 @@ function parseStringArray(json: string | null | undefined): string[] {
   }
 }
 
+function parseAnalysis(
+  json: string | null | undefined,
+): InboxMessageAnalysis | null {
+  if (!json) return null;
+  try {
+    return JSON.parse(json) as InboxMessageAnalysis;
+  } catch {
+    return null;
+  }
+}
+
 function rowToStored(
   row: typeof inboxMessages.$inferSelect,
 ): StoredInboxMessage {
@@ -118,6 +131,7 @@ function rowToStored(
     sent_at: row.sentAt,
     read_at: row.readAt,
     created_at: row.createdAt,
+    analysis: parseAnalysis(row.analysisJson),
   };
 }
 
@@ -245,6 +259,7 @@ export class InboxStore {
       sentAt: input.sentAt,
       readAt: input.direction === "outbound" ? now : null,
       createdAt: now,
+      analysisJson: null,
     };
 
     await db.insert(inboxMessages).values(row);
@@ -364,6 +379,25 @@ export class InboxStore {
       .where(eq(inboxMessages.id, messageId))
       .limit(1);
     return rows.length > 0 ? rowToStored(rows[0]) : null;
+  }
+
+  async getAnalysis(messageId: string): Promise<InboxMessageAnalysis | null> {
+    const message = await this.findById(messageId);
+    return message?.analysis || null;
+  }
+
+  async updateAnalysis(
+    messageId: string,
+    analysis: InboxMessageAnalysis,
+  ): Promise<StoredInboxMessage | null> {
+    await db
+      .update(inboxMessages)
+      .set({
+        analysisJson: JSON.stringify(analysis),
+      })
+      .where(eq(inboxMessages.id, messageId));
+
+    return this.findById(messageId);
   }
 
   /**

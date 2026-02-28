@@ -10,7 +10,7 @@ import { PropertyStore } from "../services/propertyStore";
 import { StreetViewCacheEntry, StoredPropertyRecord } from "../types/property";
 import { StreetViewService } from "../services/googleStreetView";
 import { EarnestWorkflowService } from "../services/earnestWorkflow";
-import { PropertyEmailSender } from "../services/propertyEmailSender";
+import { OutboundEmailService } from "../services/outboundEmailService";
 
 // ---------------------------------------------------------------------------
 // Mock Resend SDK so no real emails are sent.
@@ -21,6 +21,14 @@ vi.mock("resend", () => {
       emails = {
         send: vi.fn().mockResolvedValue({
           data: { id: "resend_mock_123" },
+          error: null,
+        }),
+        get: vi.fn().mockResolvedValue({
+          data: {
+            id: "resend_mock_123",
+            message_id: "<outbound-123@example.com>",
+            created_at: "2026-02-28T12:00:00.000Z",
+          },
           error: null,
         }),
       };
@@ -70,7 +78,8 @@ const CREATE_INBOX_MESSAGES = `
     read INTEGER DEFAULT 0,
     sent_at TEXT NOT NULL,
     read_at TEXT,
-    created_at TEXT NOT NULL
+    created_at TEXT NOT NULL,
+    analysis_json TEXT
   )
 `;
 
@@ -203,19 +212,6 @@ class StubDocumentStore {
   }
 }
 
-class StubPropertyEmailSender {
-  async send(input: { from: string; to: string[]; subject: string }) {
-    return {
-      id: `msg_mock_${Date.now()}`,
-      thread_id: `thread_mock_${Date.now()}`,
-      sent_at: "2026-02-28T12:00:00.000Z",
-      from: input.from,
-      to: input.to,
-      subject: input.subject,
-    };
-  }
-}
-
 // ---------------------------------------------------------------------------
 // Helper to seed a message directly via InboxStore
 // ---------------------------------------------------------------------------
@@ -264,7 +260,7 @@ describe("inbox route endpoints", () => {
         new StubStreetViewService(),
         new StubDocumentStore() as any,
         {} as EarnestWorkflowService,
-        new StubPropertyEmailSender() as any,
+        new OutboundEmailService(inboxStore),
         inboxStore,
       ),
     );

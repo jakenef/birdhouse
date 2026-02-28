@@ -141,6 +141,7 @@ export const inboxMessages = sqliteTable("inbox_messages", {
   sentAt: text("sent_at").notNull(), // when the email was sent
   readAt: text("read_at"), // when marked read
   createdAt: text("created_at").notNull(), // when we stored it
+  analysisJson: text("analysis_json"),
 });
 
 export type InboxMessage = typeof inboxMessages.$inferSelect;
