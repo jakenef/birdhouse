@@ -629,94 +629,55 @@ export function createPropertiesRouter(
           return;
         }
 
-        const sendInput: SendPropertyEmailInput = {
-          property_id: property.id,
-          from: property.property_email,
-          to: req.body.to,
-          subject: req.body.subject,
-          body: req.body.body,
-          body_html: req.body.body_html || null,
-          reply_to_thread_id: req.body.reply_to_thread_id || null,
-          attachments: Array.isArray(req.body.attachments)
-            ? req.body.attachments
-                .filter(
-                  (attachment: Record<string, unknown>) =>
-                    typeof attachment.filename === "string" &&
-                    typeof attachment.mime_type === "string",
-                )
-                .map((attachment: Record<string, unknown>, index: number) => ({
-                  document_id:
-                    typeof attachment.document_id === "string"
-                      ? attachment.document_id
-                      : `inline_${index}`,
-                  filename: attachment.filename as string,
-                  mime_type: attachment.mime_type as string,
-                }))
-            : [],
-        };
-
-        const sentMessage = await propertyEmailSender.send(sendInput);
         // Build threading headers if replying
-        const customHeaders: Record<string, string> = {};
-        let replyToThreadId: string | undefined;
         let inReplyToHeader: string | undefined;
         const referencesArr: string[] = [];
 
         if (reply_to_message_id) {
           const parentMsg = await inboxStore.findById(reply_to_message_id);
-          if (parentMsg) {
-            replyToThreadId = parentMsg.thread_id;
-            if (parentMsg.message_id) {
-              inReplyToHeader = parentMsg.message_id;
-              customHeaders["In-Reply-To"] = parentMsg.message_id;
-              // Build References chain
-              const parentRefs = parentMsg.references || [];
-              referencesArr.push(...parentRefs, parentMsg.message_id);
-              customHeaders["References"] = referencesArr.join(" ");
-            }
+          if (parentMsg && parentMsg.message_id) {
+            inReplyToHeader = parentMsg.message_id;
+            const parentRefs = parentMsg.references || [];
+            referencesArr.push(...parentRefs, parentMsg.message_id);
           }
         }
 
         // Send via Resend API
-        const apiKey = process.env.RESEND_API_KEY;
-        if (!apiKey) {
+        const resendApiKey = process.env.RESEND_API_KEY;
+        if (!resendApiKey) {
           res.status(500).json({
-            error: { message: "RESEND_API_KEY not configured." },
+            error: { message: "RESEND_API_KEY is not configured." },
           });
           return;
         }
 
-        const resend = new Resend(apiKey);
+        const resend = new Resend(resendApiKey);
+        const { data: emailResult, error: sendError } =
+          await resend.emails.send({
+            from: property.property_email,
+            to,
+            cc: cc ?? undefined,
+            subject,
+            text: body,
+            html: body_html ?? undefined,
+            headers: {
+              ...(inReplyToHeader ? { "In-Reply-To": inReplyToHeader } : {}),
+              ...(referencesArr.length > 0
+                ? { References: referencesArr.join(" ") }
+                : {}),
+            },
+          });
 
-        const sendPayload: any = {
-          from: property.property_email,
-          to,
-          subject,
-          text: body,
-          replyTo: property.property_email,
-        };
-        if (body_html) sendPayload.html = body_html;
-        if (cc && Array.isArray(cc)) sendPayload.cc = cc;
-        if (bcc && Array.isArray(bcc)) sendPayload.bcc = bcc;
-        if (Object.keys(customHeaders).length > 0) {
-          sendPayload.headers = customHeaders;
-        }
-
-        const { data: sendResult, error: sendError } =
-          await resend.emails.send(sendPayload);
-
-        if (sendError || !sendResult) {
+        if (sendError || !emailResult) {
           res.status(502).json({
             error: {
-              message: `Send failed: ${sendError?.message ?? "Unknown error"}`,
+              message: sendError?.message ?? "Failed to send email via Resend.",
             },
           });
           return;
         }
 
-        const sentEmailId = (sendResult as any).id;
-
-        // Store in inbox immediately
+        // Store in inbox
         const toArr = to.map((addr: string) => ({
           email: addr,
           name: null,
@@ -727,7 +688,7 @@ export function createPropertiesRouter(
         }));
 
         const storedMessage = await inboxStore.createMessage({
-          resendEmailId: sentEmailId,
+          resendEmailId: emailResult.id,
           propertyId: property.id,
           direction: "outbound",
           fromEmail: property.property_email,
@@ -737,7 +698,7 @@ export function createPropertiesRouter(
           subject,
           bodyText: body,
           bodyHtml: body_html ?? null,
-          messageId: null, // Resend doesn't return Message-ID on send
+          messageId: null,
           inReplyTo: inReplyToHeader ?? null,
           references: referencesArr,
           hasAttachments: false,
@@ -746,12 +707,6 @@ export function createPropertiesRouter(
 
         res.status(201).json({
           message: {
-            id: sentMessage.id,
-            thread_id: sentMessage.thread_id,
-            sent_at: sentMessage.sent_at,
-            from: sentMessage.from,
-            to: sentMessage.to,
-            subject: sentMessage.subject,
             id: storedMessage.id,
             thread_id: storedMessage.thread_id,
             sent_at: storedMessage.sent_at,

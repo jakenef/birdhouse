@@ -264,35 +264,6 @@ async function processEmail(
 
         const docHash = sha256(pdfBuffer);
 
-      // Route to appropriate handler
-      if (isIntakeEmail) {
-        await processIntakeEmail(
-          email,
-          att,
-          pdfBuffer,
-          savedFilename,
-          docHash,
-          store,
-          docStore,
-          earnestWorkflowService,
-        );
-      } else {
-        await processPropertyEmail(
-          targetEmail,
-          att,
-          pdfBuffer,
-          savedFilename,
-          docHash,
-          store,
-          docStore,
-        );
-      }
-    } catch (err) {
-      if (err instanceof DuplicatePropertyError) {
-        log("skip duplicate");
-      } else {
-        log(`error: ${err instanceof Error ? err.message : String(err)}`);
-      }
         // Route to appropriate handler
         if (isIntakeEmail) {
           await processIntakeEmail(
@@ -303,6 +274,7 @@ async function processEmail(
             docHash,
             store,
             docStore,
+            earnestWorkflowService,
           );
         } else {
           await processPropertyEmail(
@@ -468,19 +440,6 @@ async function pollOnce(
       }
     }
 
-  // Phase 1: Process intake emails FIRST (creates properties)
-  for (const { email, targetEmail } of intakeEmails) {
-    await processEmail(
-      resend,
-      email,
-      targetEmail,
-      true,
-      store,
-      docStore,
-      earnestWorkflowService,
-    );
-    await markEmailProcessed(email.id);
-  }
     // Phase 1: Process intake emails FIRST (creates properties)
     for (const { email, targetEmail } of intakeEmails) {
       await processEmail(
@@ -490,23 +449,12 @@ async function pollOnce(
         true,
         store,
         docStore,
+        earnestWorkflowService,
         inboxStore,
       );
       await markEmailProcessed(email.id);
     }
 
-  // Phase 2: Process property-specific emails (adds docs to existing properties)
-  for (const { email, targetEmail } of propertyEmails) {
-    await processEmail(
-      resend,
-      email,
-      targetEmail,
-      false,
-      store,
-      docStore,
-      earnestWorkflowService,
-    );
-    await markEmailProcessed(email.id);
     // Phase 2: Process property-specific emails (adds docs + stores in inbox)
     for (const { email, targetEmail } of propertyEmails) {
       await processEmail(
@@ -516,6 +464,7 @@ async function pollOnce(
         false,
         store,
         docStore,
+        earnestWorkflowService,
         inboxStore,
       );
       await markEmailProcessed(email.id);
@@ -658,15 +607,15 @@ export function startEmailPolling(
   );
 
   // Run immediately, then on interval
-  pollOnce(resend, store, docStore, earnestWorkflowService).catch((err) =>
-  pollOnce(resend, store, docStore, inboxStore).catch((err) =>
-    log(`poll error: ${err instanceof Error ? err.message : String(err)}`),
+  pollOnce(resend, store, docStore, earnestWorkflowService, inboxStore).catch(
+    (err) =>
+      log(`poll error: ${err instanceof Error ? err.message : String(err)}`),
   );
 
   pollTimer = setInterval(() => {
-    pollOnce(resend, store, docStore, earnestWorkflowService).catch((err) =>
-    pollOnce(resend, store, docStore, inboxStore).catch((err) =>
-      log(`poll error: ${err instanceof Error ? err.message : String(err)}`),
+    pollOnce(resend, store, docStore, earnestWorkflowService, inboxStore).catch(
+      (err) =>
+        log(`poll error: ${err instanceof Error ? err.message : String(err)}`),
     );
   }, POLL_INTERVAL_MS);
 }

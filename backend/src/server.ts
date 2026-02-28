@@ -51,11 +51,6 @@ app.use(
     documentStore,
     earnestWorkflowService,
     propertyEmailSender,
-  ),
-  createPropertiesRouter(
-    propertyStore,
-    streetViewService,
-    documentStore,
     inboxStore,
   ),
 );
@@ -83,8 +78,12 @@ app.use((error: unknown, _req: Request, res: Response, _next: NextFunction) => {
 
 app.listen(port, () => {
   // Start email intake polling
-  startEmailPolling(propertyStore, documentStore, earnestWorkflowService);
-  startEmailPolling(propertyStore, documentStore, inboxStore);
+  startEmailPolling(
+    propertyStore,
+    documentStore,
+    earnestWorkflowService,
+    inboxStore,
+  );
 
   console.log(
     JSON.stringify({

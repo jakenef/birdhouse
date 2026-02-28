@@ -1,6 +1,6 @@
 import express from "express";
 import request from "supertest";
-import { describe, expect, it, beforeEach } from "vitest";
+import { describe, expect, it, beforeEach, vi } from "vitest";
 
 import { ParsedPurchaseContract } from "../schemas/parsedPurchaseContract.schema";
 import { DocumentStore } from "../services/documentStore";
@@ -9,6 +9,7 @@ import {
   EarnestWorkflowService,
 } from "../services/earnestWorkflow";
 import { StreetViewService } from "../services/googleStreetView";
+import { InboxStore } from "../services/inboxStore";
 import { PropertyEmailSender } from "../services/propertyEmailSender";
 import {
   DuplicatePropertyError,
@@ -17,6 +18,22 @@ import {
 import { StoredPropertyRecord, StreetViewCacheEntry } from "../types/property";
 import { PropertyWorkflowState } from "../types/workflow";
 import { createPropertiesRouter } from "./properties";
+
+// ---------------------------------------------------------------------------
+// Mock Resend SDK so no real emails are sent.
+// ---------------------------------------------------------------------------
+vi.mock("resend", () => {
+  return {
+    Resend: class {
+      emails = {
+        send: vi.fn().mockResolvedValue({
+          data: { id: "resend_mock_456" },
+          error: null,
+        }),
+      };
+    },
+  };
+});
 
 function buildParsedContract(docHash: string): ParsedPurchaseContract {
   return {
@@ -91,7 +108,8 @@ class InMemoryPropertyStore implements PropertyStore {
   ): Promise<StoredPropertyRecord> {
     const existing = this.records.find(
       (record) =>
-        record.parsed_contract.metadata.doc_hash === parsedContract.metadata.doc_hash,
+        record.parsed_contract.metadata.doc_hash ===
+        parsedContract.metadata.doc_hash,
     );
 
     if (existing) {
@@ -123,7 +141,9 @@ class InMemoryPropertyStore implements PropertyStore {
     return this.records.find((record) => record.id === id) || null;
   }
 
-  async getWorkflowState(propertyId: string): Promise<PropertyWorkflowState | null> {
+  async getWorkflowState(
+    propertyId: string,
+  ): Promise<PropertyWorkflowState | null> {
     return (await this.findById(propertyId))?.workflow_state || null;
   }
 
@@ -167,11 +187,7 @@ class StubDocumentStore {
 }
 
 class StubPropertyEmailSender {
-  async send(input: {
-    from: string;
-    to: string[];
-    subject: string;
-  }) {
+  async send(input: { from: string; to: string[]; subject: string }) {
     return {
       id: "msg_123",
       thread_id: "thread_123",
@@ -180,6 +196,55 @@ class StubPropertyEmailSender {
       to: input.to,
       subject: input.subject,
     };
+  }
+}
+
+class StubInboxStore {
+  async createMessage() {
+    return {
+      id: "im_stub",
+      resend_email_id: null,
+      property_id: "prop_1",
+      thread_id: "thr_stub",
+      direction: "outbound" as const,
+      from_email: "test@example.com",
+      from_name: null,
+      to: [],
+      cc: [],
+      bcc: [],
+      subject: "test",
+      body_text: null,
+      body_html: null,
+      message_id: null,
+      in_reply_to: null,
+      references: [],
+      has_attachments: false,
+      read: true,
+      sent_at: "2026-02-28T00:00:00.000Z",
+      read_at: null,
+      created_at: "2026-02-28T00:00:00.000Z",
+    };
+  }
+  async findById() {
+    return null;
+  }
+  async listThreadsByPropertyId() {
+    return [];
+  }
+  async getThread() {
+    return [];
+  }
+  async markRead() {
+    return null;
+  }
+  async existsByResendId() {
+    return false;
+  }
+  async findByMessageId() {
+    return null;
+  }
+  async computeThreadId() {
+    return "thr_stub";
   }
 }
 
@@ -195,7 +260,8 @@ class StubEarnestWorkflowService {
       current_label: "earnest_money" as const,
       step_status: "locked" as const,
       locked_reason: "Escrow officer contact is missing.",
-      prompt_to_user: "Add your escrow officer contact to prepare the earnest email.",
+      prompt_to_user:
+        "Add your escrow officer contact to prepare the earnest email.",
       contact: null,
       attachment: null,
       draft: {
@@ -246,7 +312,10 @@ class StubEarnestWorkflowService {
     };
   }
 
-  async sendEarnestDraft(propertyId: string, input: { subject: string; body: string }) {
+  async sendEarnestDraft(
+    propertyId: string,
+    input: { subject: string; body: string },
+  ) {
     if (propertyId === "prop_locked") {
       throw new EarnestWorkflowError(
         "Earnest draft can only be sent when the step is action_needed.",
@@ -316,6 +385,7 @@ describe("properties routes", () => {
 
   beforeEach(() => {
     store = new InMemoryPropertyStore();
+    process.env.RESEND_API_KEY = "re_test_mock_key";
     app = express();
     app.use(express.json());
     app.use(
@@ -326,6 +396,7 @@ describe("properties routes", () => {
         new StubDocumentStore() as unknown as DocumentStore,
         new StubEarnestWorkflowService() as unknown as EarnestWorkflowService,
         new StubPropertyEmailSender() as unknown as PropertyEmailSender,
+        new StubInboxStore() as unknown as InboxStore,
       ),
     );
   });
@@ -349,7 +420,9 @@ describe("properties routes", () => {
   });
 
   it("returns 409 for duplicate doc_hash", async () => {
-    await request(app).post("/api/properties").send(buildParsedContract("doc-1"));
+    await request(app)
+      .post("/api/properties")
+      .send(buildParsedContract("doc-1"));
     const response = await request(app)
       .post("/api/properties")
       .send(buildParsedContract("doc-1"));
@@ -365,8 +438,12 @@ describe("properties routes", () => {
   });
 
   it("returns newest-first mapped card dtos", async () => {
-    await request(app).post("/api/properties").send(buildParsedContract("doc-1"));
-    await request(app).post("/api/properties").send(buildParsedContract("doc-2"));
+    await request(app)
+      .post("/api/properties")
+      .send(buildParsedContract("doc-1"));
+    await request(app)
+      .post("/api/properties")
+      .send(buildParsedContract("doc-2"));
 
     const response = await request(app).get("/api/properties");
 
@@ -389,7 +466,9 @@ describe("properties routes", () => {
   });
 
   it("hydrates street view data into the property list", async () => {
-    await request(app).post("/api/properties").send(buildParsedContract("doc-1"));
+    await request(app)
+      .post("/api/properties")
+      .send(buildParsedContract("doc-1"));
 
     const response = await request(app).get("/api/properties");
 
@@ -402,9 +481,13 @@ describe("properties routes", () => {
   });
 
   it("serves the street view proxy image", async () => {
-    await request(app).post("/api/properties").send(buildParsedContract("doc-1"));
+    await request(app)
+      .post("/api/properties")
+      .send(buildParsedContract("doc-1"));
 
-    const response = await request(app).get("/api/properties/prop_1/street-view");
+    const response = await request(app).get(
+      "/api/properties/prop_1/street-view",
+    );
 
     expect(response.status).toBe(200);
     expect(response.headers["content-type"]).toContain("image/jpeg");
@@ -412,22 +495,30 @@ describe("properties routes", () => {
   });
 
   it("returns 404 when a property does not exist for the street view route", async () => {
-    const response = await request(app).get("/api/properties/prop_missing/street-view");
+    const response = await request(app).get(
+      "/api/properties/prop_missing/street-view",
+    );
 
     expect(response.status).toBe(404);
   });
 
   it("returns the earnest pipeline state", async () => {
-    await request(app).post("/api/properties").send(buildParsedContract("doc-1"));
+    await request(app)
+      .post("/api/properties")
+      .send(buildParsedContract("doc-1"));
 
-    const response = await request(app).get("/api/properties/prop_1/pipeline/earnest");
+    const response = await request(app).get(
+      "/api/properties/prop_1/pipeline/earnest",
+    );
 
     expect(response.status).toBe(200);
     expect(response.body.earnest.step_status).toBe("locked");
   });
 
   it("prepares the earnest draft", async () => {
-    await request(app).post("/api/properties").send(buildParsedContract("doc-1"));
+    await request(app)
+      .post("/api/properties")
+      .send(buildParsedContract("doc-1"));
 
     const response = await request(app).post(
       "/api/properties/prop_1/pipeline/earnest/prepare",
@@ -435,11 +526,15 @@ describe("properties routes", () => {
 
     expect(response.status).toBe(200);
     expect(response.body.earnest.step_status).toBe("action_needed");
-    expect(response.body.earnest.draft.subject).toBe("Earnest Money - 123 Main");
+    expect(response.body.earnest.draft.subject).toBe(
+      "Earnest Money - 123 Main",
+    );
   });
 
   it("rejects earnest send requests without subject or body", async () => {
-    await request(app).post("/api/properties").send(buildParsedContract("doc-1"));
+    await request(app)
+      .post("/api/properties")
+      .send(buildParsedContract("doc-1"));
 
     const missingSubject = await request(app)
       .post("/api/properties/prop_1/pipeline/earnest/send")
@@ -455,7 +550,9 @@ describe("properties routes", () => {
   });
 
   it("sends the earnest draft and returns waiting_for_parties", async () => {
-    await request(app).post("/api/properties").send(buildParsedContract("doc-1"));
+    await request(app)
+      .post("/api/properties")
+      .send(buildParsedContract("doc-1"));
 
     const response = await request(app)
       .post("/api/properties/prop_1/pipeline/earnest/send")
@@ -470,7 +567,9 @@ describe("properties routes", () => {
   });
 
   it("uses the shared mocked sender for inbox send", async () => {
-    await request(app).post("/api/properties").send(buildParsedContract("doc-1"));
+    await request(app)
+      .post("/api/properties")
+      .send(buildParsedContract("doc-1"));
 
     const response = await request(app)
       .post("/api/properties/prop_1/inbox/send")
@@ -481,7 +580,7 @@ describe("properties routes", () => {
       });
 
     expect(response.status).toBe(201);
-    expect(response.body.message.id).toBe("msg_123");
-    expect(response.body.message.thread_id).toBe("thread_123");
+    expect(response.body.message.id).toMatch(/^im_/);
+    expect(response.body.message.thread_id).toMatch(/^thr_/);
   });
 });

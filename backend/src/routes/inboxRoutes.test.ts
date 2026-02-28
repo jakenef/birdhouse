@@ -9,6 +9,24 @@ import { ParsedPurchaseContract } from "../schemas/parsedPurchaseContract.schema
 import { PropertyStore } from "../services/propertyStore";
 import { StreetViewCacheEntry, StoredPropertyRecord } from "../types/property";
 import { StreetViewService } from "../services/googleStreetView";
+import { EarnestWorkflowService } from "../services/earnestWorkflow";
+import { PropertyEmailSender } from "../services/propertyEmailSender";
+
+// ---------------------------------------------------------------------------
+// Mock Resend SDK so no real emails are sent.
+// ---------------------------------------------------------------------------
+vi.mock("resend", () => {
+  return {
+    Resend: class {
+      emails = {
+        send: vi.fn().mockResolvedValue({
+          data: { id: "resend_mock_123" },
+          error: null,
+        }),
+      };
+    },
+  };
+});
 
 // ---------------------------------------------------------------------------
 // Mock the DB module with an in-memory SQLite so InboxStore works.
@@ -20,20 +38,6 @@ vi.mock("../db", async () => {
   const _sqlite = new _Database(":memory:");
   const _db = _drizzle(_sqlite, { schema: _schema });
   return { db: _db, __sqlite: _sqlite };
-});
-
-// Mock the Resend SDK so POST /inbox/send doesn't make real API calls.
-vi.mock("resend", () => {
-  return {
-    Resend: vi.fn().mockImplementation(() => ({
-      emails: {
-        send: vi.fn().mockResolvedValue({
-          data: { id: "resend_mock_123" },
-          error: null,
-        }),
-      },
-    })),
-  };
 });
 
 import { db } from "../db";
@@ -154,6 +158,12 @@ class StubPropertyStore implements PropertyStore {
   ): Promise<StoredPropertyRecord> {
     throw new Error("not implemented in stub");
   }
+  async getWorkflowState() {
+    return null;
+  }
+  async updateWorkflowState(): Promise<StoredPropertyRecord> {
+    throw new Error("not implemented in stub");
+  }
 }
 
 class StubStreetViewService implements StreetViewService {
@@ -190,6 +200,19 @@ class StubDocumentStore {
   }
   async create() {
     throw new Error("not implemented");
+  }
+}
+
+class StubPropertyEmailSender {
+  async send(input: { from: string; to: string[]; subject: string }) {
+    return {
+      id: `msg_mock_${Date.now()}`,
+      thread_id: `thread_mock_${Date.now()}`,
+      sent_at: "2026-02-28T12:00:00.000Z",
+      from: input.from,
+      to: input.to,
+      subject: input.subject,
+    };
   }
 }
 
@@ -230,6 +253,8 @@ describe("inbox route endpoints", () => {
 
     inboxStore = new InboxStore();
 
+    process.env.RESEND_API_KEY = "re_test_mock_key";
+
     app = express();
     app.use(express.json());
     app.use(
@@ -238,6 +263,8 @@ describe("inbox route endpoints", () => {
         new StubPropertyStore(),
         new StubStreetViewService(),
         new StubDocumentStore() as any,
+        {} as EarnestWorkflowService,
+        new StubPropertyEmailSender() as any,
         inboxStore,
       ),
     );
@@ -403,7 +430,7 @@ describe("inbox route endpoints", () => {
       expect(res.body.message.id).toMatch(/^im_/);
       expect(res.body.message.thread_id).toMatch(/^thr_/);
 
-      // Verify the message was stored
+      // Verify the message was also stored in the inbox
       const threads = await inboxStore.listThreadsByPropertyId("prop_test1");
       expect(threads).toHaveLength(1);
       expect(threads[0].subject).toBe("Closing docs");
