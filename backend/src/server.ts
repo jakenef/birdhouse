@@ -6,6 +6,7 @@ import multer from "multer";
 
 import { parseRouter } from "./routes/parse";
 import { createPropertiesRouter } from "./routes/properties";
+import { createContactsRouter } from "./routes/contacts";
 import { GoogleStreetViewService } from "./services/googleStreetView";
 import { DrizzlePropertyStore } from "./services/drizzlePropertyStore";
 import { DocumentStore } from "./services/documentStore";
@@ -33,6 +34,7 @@ app.use(
   "/api",
   createPropertiesRouter(propertyStore, streetViewService, documentStore),
 );
+app.use("/api", createContactsRouter());
 
 app.use((error: unknown, _req: Request, res: Response, _next: NextFunction) => {
   if (error instanceof multer.MulterError && error.code === "LIMIT_FILE_SIZE") {
