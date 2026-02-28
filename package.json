@@ -7,6 +7,7 @@
     "dev": "concurrently \"npm run backend\" \"npm run frontend\"",
     "backend": "cd backend && npm run dev",
     "frontend": "wait-on http://localhost:3001/health && cd frontend && npm run dev",
+    "reset-db": "rm -f backend/birdhouse.db backend/birdhouse.db-wal backend/birdhouse.db-shm && echo 'Database reset.'",
     "install-all": "npm install && cd backend && npm install && cd ../frontend && npm install"
   },
   "devDependencies": {

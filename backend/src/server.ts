@@ -8,11 +8,13 @@ import { parseRouter } from "./routes/parse";
 import { createPropertiesRouter } from "./routes/properties";
 import { GoogleStreetViewService } from "./services/googleStreetView";
 import { DrizzlePropertyStore } from "./services/drizzlePropertyStore";
+import { DocumentStore } from "./services/documentStore";
 import { startEmailPolling } from "./services/emailIntake";
 
 const app = express();
 const port = Number(process.env.PORT || "3001");
 const propertyStore = new DrizzlePropertyStore();
+const documentStore = new DocumentStore();
 const streetViewService = new GoogleStreetViewService();
 
 app.use(cors());
@@ -27,7 +29,10 @@ app.get("/health", (_req: Request, res: Response) => {
 });
 
 app.use("/api", parseRouter);
-app.use("/api", createPropertiesRouter(propertyStore, streetViewService));
+app.use(
+  "/api",
+  createPropertiesRouter(propertyStore, streetViewService, documentStore),
+);
 
 app.use((error: unknown, _req: Request, res: Response, _next: NextFunction) => {
   if (error instanceof multer.MulterError && error.code === "LIMIT_FILE_SIZE") {
@@ -51,7 +56,7 @@ app.use((error: unknown, _req: Request, res: Response, _next: NextFunction) => {
 
 app.listen(port, () => {
   // Start email intake polling
-  startEmailPolling(propertyStore);
+  startEmailPolling(propertyStore, documentStore);
 
   console.log(
     JSON.stringify({
@@ -60,6 +65,8 @@ app.listen(port, () => {
       health_url: `http://localhost:${port}/health`,
       parse_url: `http://localhost:${port}/api/parse`,
       properties_url: `http://localhost:${port}/api/properties`,
+      property_detail_url: `http://localhost:${port}/api/properties/:propertyId`,
+      document_download_url: `http://localhost:${port}/api/properties/:propertyId/documents/:docId/download`,
       property_street_view_url: `http://localhost:${port}/api/properties/:propertyId/street-view`,
     }),
   );
