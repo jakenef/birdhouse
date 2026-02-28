@@ -9,6 +9,7 @@ type ApiProperty = {
   id: string;
   property_name: string;
   property_email?: string | null;
+  propertyEmail?: string | null;
   address_full: string | null;
   city: string | null;
   state: string | null;
@@ -137,15 +138,21 @@ function isApiProperty(value: unknown): value is ApiProperty {
   }
 
   const propertyEmailValue = value.property_email;
+  const propertyEmailCamelValue = value.propertyEmail;
   const hasValidPropertyEmail =
     propertyEmailValue === undefined ||
     typeof propertyEmailValue === "string" ||
     propertyEmailValue === null;
+  const hasValidPropertyEmailCamel =
+    propertyEmailCamelValue === undefined ||
+    typeof propertyEmailCamelValue === "string" ||
+    propertyEmailCamelValue === null;
 
   return (
     typeof value.id === "string" &&
     typeof value.property_name === "string" &&
     hasValidPropertyEmail &&
+    hasValidPropertyEmailCamel &&
     "purchase_price" in value &&
     "settlement_deadline" in value &&
     typeof value.created_at_iso === "string" &&
@@ -245,11 +252,13 @@ function mapApiPropertyToDeal(property: ApiProperty, index: number): Deal {
   const daysToClose = daysUntil(closeDateIso);
   const urgency = urgencyFromDays(daysToClose);
 
+  const propertyEmail = property.property_email ?? property.propertyEmail ?? null;
+
   return {
     id: property.id,
     address: property.address_full || property.property_name,
     cityState: formatCityState(property.city, property.state, property.zip),
-    propertyEmail: property.property_email ?? null,
+    propertyEmail,
     imageUrl,
     status: statusFromDays(daysToClose),
     urgencyLabel: urgency.label,
