@@ -6,6 +6,7 @@ export interface Deal {
   id: string;
   address: string;
   cityState: string;
+  propertyEmail?: string | null;
   imageUrl: string;
   status: DealStatus;
   urgencyLabel: string;

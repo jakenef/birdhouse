@@ -360,6 +360,43 @@
   font-weight: 600;
 }
 
+.deal-card__inbox {
+  margin: 0;
+  border-top: 1px solid #e5e8ee;
+  background: #ffffff;
+  color: #344256;
+  min-height: 2rem;
+  display: grid;
+  grid-template-columns: auto auto minmax(0, 1fr);
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.52rem 0.86rem 0.58rem;
+}
+
+.deal-card__inbox svg {
+  width: 0.76rem;
+  height: 0.76rem;
+  color: #1f4f97;
+}
+
+.deal-card__inbox-label {
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.2;
+  color: #5f6e82;
+}
+
+.deal-card__inbox-value {
+  min-width: 0;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.2;
+  color: #16325f;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .bottom-nav {
   position: fixed;
   left: 50%;
