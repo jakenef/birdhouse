@@ -1,32 +1,19 @@
 import "dotenv/config";
+import path from "path";
 import cors from "cors";
 import express, { NextFunction, Request, Response } from "express";
 import multer from "multer";
 
 import { parseRouter } from "./routes/parse";
-
-const requiredEnvVars = [
-  "GOOGLE_CLOUD_PROJECT_ID",
-  "GOOGLE_CLOUD_LOCATION",
-  "DOCUMENT_AI_PROCESSOR_ID",
-  "GOOGLE_APPLICATION_CREDENTIALS",
-  "OPENAI_API_KEY",
-  "OPENAI_MODEL",
-] as const;
-
-const missingEnvVars = requiredEnvVars.filter((envVar) => {
-  const value = process.env[envVar];
-  return !value || value.trim().length === 0;
-});
-
-if (missingEnvVars.length > 0) {
-  throw new Error(
-    `Missing required environment variables: ${missingEnvVars.join(", ")}`,
-  );
-}
+import { createPropertiesRouter } from "./routes/properties";
+import { FilePropertyStore } from "./services/filePropertyStore";
 
 const app = express();
 const port = Number(process.env.PORT || "3001");
+const propertyStore = new FilePropertyStore(
+  process.env.MOCK_PROPERTIES_DB_PATH ||
+    path.resolve(process.cwd(), "data", "mock-properties.json"),
+);
 
 app.use(cors());
 app.use(express.json());
@@ -40,6 +27,7 @@ app.get("/health", (_req: Request, res: Response) => {
 });
 
 app.use("/api", parseRouter);
+app.use("/api", createPropertiesRouter(propertyStore));
 
 app.use(
   (error: unknown, _req: Request, res: Response, _next: NextFunction) => {
@@ -70,6 +58,7 @@ app.listen(port, () => {
       port,
       health_url: `http://localhost:${port}/health`,
       parse_url: `http://localhost:${port}/api/parse`,
+      properties_url: `http://localhost:${port}/api/properties`,
     }),
   );
 });
