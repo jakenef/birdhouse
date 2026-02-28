@@ -147,6 +147,14 @@ export function PropertyCard({ deal, onOpenDeal }: PropertyCardProps) {
           </dd>
         </div>
       </dl>
+
+      <p className="deal-card__inbox">
+        <MailIcon />
+        <span className="deal-card__inbox-label">Property inbox</span>
+        <span className="deal-card__inbox-value">
+          {deal.propertyEmail || "Unavailable"}
+        </span>
+      </p>
     </button>
   );
 }
@@ -157,6 +165,21 @@ function LocationPinIcon() {
       <path
         d="M12 21s7-6.1 7-11a7 7 0 1 0-14 0c0 4.9 7 11 7 11Zm0-8.5a2.5 2.5 0 1 1 0-5 2.5 2.5 0 0 1 0 5Z"
         fill="currentColor"
+      />
+    </svg>
+  );
+}
+
+function MailIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path
+        d="M4 7.5A1.5 1.5 0 0 1 5.5 6h13A1.5 1.5 0 0 1 20 7.5v9a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 16.5v-9Zm1.7.2 6.3 4.7 6.3-4.7"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.7"
+        strokeLinecap="round"
+        strokeLinejoin="round"
       />
     </svg>
   );

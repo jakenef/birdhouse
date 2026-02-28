@@ -8,6 +8,8 @@ type ApiStreetView = {
 type ApiProperty = {
   id: string;
   property_name: string;
+  property_email?: string | null;
+  propertyEmail?: string | null;
   address_full: string | null;
   city: string | null;
   state: string | null;
@@ -38,6 +40,7 @@ const MOCK_DEALS: Deal[] = [
     id: "deal-maple-ridge",
     address: "4821 Maple Ridge Dr",
     cityState: "Austin, TX 78701",
+    propertyEmail: "4821-maple-ridge-dr@bronaaelda.resend.app",
     imageUrl: DEAL_IMAGES[0],
     status: "Under Contract",
     urgencyLabel: "4d to close",
@@ -52,6 +55,7 @@ const MOCK_DEALS: Deal[] = [
     id: "deal-sycamore",
     address: "2204 Sycamore St",
     cityState: "Nashville, TN 37201",
+    propertyEmail: "2204-sycamore-st@bronaaelda.resend.app",
     imageUrl: DEAL_IMAGES[1],
     status: "Closing",
     urgencyLabel: "1d to close",
@@ -66,6 +70,7 @@ const MOCK_DEALS: Deal[] = [
     id: "deal-westfield",
     address: "102 Westfield Ave",
     cityState: "Denver, CO 80203",
+    propertyEmail: "102-westfield-ave@bronaaelda.resend.app",
     imageUrl: DEAL_IMAGES[2],
     status: "Due Diligence",
     urgencyLabel: "Due soon",
@@ -80,6 +85,7 @@ const MOCK_DEALS: Deal[] = [
     id: "deal-pinecrest",
     address: "89 Pinecrest Ave",
     cityState: "Salt Lake City, UT 84103",
+    propertyEmail: "89-pinecrest-ave@bronaaelda.resend.app",
     imageUrl: DEAL_IMAGES[3],
     status: "Under Contract",
     urgencyLabel: "6d to close",
@@ -94,6 +100,7 @@ const MOCK_DEALS: Deal[] = [
     id: "deal-harbor",
     address: "14 Harbor View Pl",
     cityState: "Seattle, WA 98109",
+    propertyEmail: "14-harbor-view-pl@bronaaelda.resend.app",
     imageUrl: DEAL_IMAGES[4],
     status: "Due Diligence",
     urgencyLabel: "Due soon",
@@ -108,6 +115,7 @@ const MOCK_DEALS: Deal[] = [
     id: "deal-brighton",
     address: "301 Brighton Lane",
     cityState: "Scottsdale, AZ 85251",
+    propertyEmail: "301-brighton-lane@bronaaelda.resend.app",
     imageUrl: DEAL_IMAGES[5],
     status: "Under Contract",
     urgencyLabel: "8d to close",
@@ -129,9 +137,22 @@ function isApiProperty(value: unknown): value is ApiProperty {
     return false;
   }
 
+  const propertyEmailValue = value.property_email;
+  const propertyEmailCamelValue = value.propertyEmail;
+  const hasValidPropertyEmail =
+    propertyEmailValue === undefined ||
+    typeof propertyEmailValue === "string" ||
+    propertyEmailValue === null;
+  const hasValidPropertyEmailCamel =
+    propertyEmailCamelValue === undefined ||
+    typeof propertyEmailCamelValue === "string" ||
+    propertyEmailCamelValue === null;
+
   return (
     typeof value.id === "string" &&
     typeof value.property_name === "string" &&
+    hasValidPropertyEmail &&
+    hasValidPropertyEmailCamel &&
     "purchase_price" in value &&
     "settlement_deadline" in value &&
     typeof value.created_at_iso === "string" &&
@@ -231,10 +252,13 @@ function mapApiPropertyToDeal(property: ApiProperty, index: number): Deal {
   const daysToClose = daysUntil(closeDateIso);
   const urgency = urgencyFromDays(daysToClose);
 
+  const propertyEmail = property.property_email ?? property.propertyEmail ?? null;
+
   return {
     id: property.id,
     address: property.address_full || property.property_name,
     cityState: formatCityState(property.city, property.state, property.zip),
+    propertyEmail,
     imageUrl,
     status: statusFromDays(daysToClose),
     urgencyLabel: urgency.label,
