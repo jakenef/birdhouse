@@ -29,27 +29,25 @@ app.get("/health", (_req: Request, res: Response) => {
 app.use("/api", parseRouter);
 app.use("/api", createPropertiesRouter(propertyStore));
 
-app.use(
-  (error: unknown, _req: Request, res: Response, _next: NextFunction) => {
-    if (error instanceof multer.MulterError && error.code === "LIMIT_FILE_SIZE") {
-      res.status(400).json({
-        error: {
-          message: "File exceeds the configured max size.",
-        },
-      });
-      return;
-    }
-
-    const message =
-      error instanceof Error ? error.message : "Internal server error";
-
-    res.status(500).json({
+app.use((error: unknown, _req: Request, res: Response, _next: NextFunction) => {
+  if (error instanceof multer.MulterError && error.code === "LIMIT_FILE_SIZE") {
+    res.status(400).json({
       error: {
-        message,
+        message: "File exceeds the configured max size.",
       },
     });
-  },
-);
+    return;
+  }
+
+  const message =
+    error instanceof Error ? error.message : "Internal server error";
+
+  res.status(500).json({
+    error: {
+      message,
+    },
+  });
+});
 
 app.listen(port, () => {
   console.log(
