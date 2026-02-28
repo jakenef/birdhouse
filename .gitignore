@@ -8,6 +8,8 @@ backend/birdhouse-488717-72ce6def9041.json
 
 # Database
 *.db
+*.db-wal
+*.db-shm
 
 # Build outputs
 dist/
