@@ -102,6 +102,11 @@ export const documents = sqliteTable("documents", {
   sizeBytes: integer("size_bytes"), // file size in bytes
   docHash: text("doc_hash"), // sha256 of the file
   source: text("source").default("email_intake"), // "email_intake" | "manual_upload"
+  aiSummary: text("ai_summary", { mode: "json" }).$type<{
+    title: string;
+    summary: string;
+    highlights: string[];
+  } | null>(), // AI-generated document summary
   createdAt: text("created_at").notNull(),
 });
 

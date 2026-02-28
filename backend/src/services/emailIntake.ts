@@ -15,6 +15,13 @@ import { DocumentStore } from "./documentStore";
 import { EarnestWorkflowService } from "./earnestWorkflow";
 import { EarnestInboxAutomation } from "./earnestInboxAutomation";
 import { InboxStore } from "./inboxStore";
+import { extractContractSummary, summarizePdf } from "./documentSummarizer";
+import { db } from "../db";
+import { processedEmails } from "../db/schema";
+
+// ---------------------------------------------------------------------------
+// Config
+// ---------------------------------------------------------------------------
 
 const EMAIL_DOMAIN = process.env.EMAIL_DOMAIN || "bronaaelda.resend.app";
 const INTAKE_ADDRESS = `intake@${EMAIL_DOMAIN}`;
@@ -116,6 +123,8 @@ async function processIntakeEmail(
 
   const record = await store.create(parsedContract);
 
+  // Store a document record linking the PDF to this property
+  const aiSummary = extractContractSummary(parsedContract);
   await docStore.create({
     propertyId: record.id,
     filename: att.filename || "attachment.pdf",
@@ -124,6 +133,7 @@ async function processIntakeEmail(
     sizeBytes: pdfBuffer.length,
     docHash,
     source: "email_intake",
+    aiSummary,
   });
 
   try {
@@ -140,6 +150,10 @@ async function processIntakeEmail(
   );
 }
 
+/**
+ * Process an email sent to a property-specific address (adds document to EXISTING property).
+ * Generates AI summary for the PDF and stores it with the document.
+ */
 async function processPropertyEmail(
   propertyEmail: string,
   att: any,
@@ -155,6 +169,21 @@ async function processPropertyEmail(
     return;
   }
 
+  // Generate AI summary for the PDF
+  let aiSummary = null;
+  try {
+    aiSummary = await summarizePdf({
+      buffer: pdfBuffer,
+      filename: att.filename || "attachment.pdf",
+      timeoutMs: REQUEST_TIMEOUT_MS,
+    });
+  } catch (error) {
+    log(
+      `warning: AI summary generation failed: ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
+
+  // Create document record (allow multiple docs with same hash for same property)
   await docStore.create({
     propertyId: property.id,
     filename: att.filename || "attachment.pdf",
@@ -163,9 +192,12 @@ async function processPropertyEmail(
     sizeBytes: pdfBuffer.length,
     docHash,
     source: "email_intake",
+    aiSummary,
   });
 
-  log(`added doc to ${property.property_name} (${att.filename || "attachment.pdf"})`);
+  log(
+    `added doc to ${property.property_name} (${att.filename || "attachment.pdf"})`,
+  );
 }
 
 async function storeInboundPropertyEmail(
@@ -190,7 +222,9 @@ async function storeInboundPropertyEmail(
     await resend.emails.receiving.get(email.id);
 
   if (fullError || !fullEmail) {
-    log(`error fetching full email: ${fullError?.message ?? "No data returned"}`);
+    log(
+      `error fetching full email: ${fullError?.message ?? "No data returned"}`,
+    );
     return;
   }
 
@@ -274,7 +308,9 @@ async function processEmail(
         });
 
       if (attError || !attData) {
-        log(`error downloading attachment: ${attError?.message ?? "No data returned"}`);
+        log(
+          `error downloading attachment: ${attError?.message ?? "No data returned"}`,
+        );
         continue;
       }
 
@@ -334,7 +370,9 @@ async function processEmail(
         earnestInboxAutomation,
       );
     } catch (error) {
-      log(`inbox store error: ${error instanceof Error ? error.message : String(error)}`);
+      log(
+        `inbox store error: ${error instanceof Error ? error.message : String(error)}`,
+      );
     }
   }
 }
@@ -347,7 +385,8 @@ async function pollOnce(
   inboxStore: InboxStore,
   earnestInboxAutomation: EarnestInboxAutomation,
 ): Promise<void> {
-  const { data: listData, error: listError } = await resend.emails.receiving.list();
+  const { data: listData, error: listError } =
+    await resend.emails.receiving.list();
   if (listError) {
     log(`poll error: ${listError.message}`);
     return;
@@ -507,15 +546,21 @@ async function pollOnce(
             new Date().toISOString(),
         });
 
-        log(`inbox stored sent: "${full.subject}" from ${property.property_name}`);
+        log(
+          `inbox stored sent: "${full.subject}" from ${property.property_name}`,
+        );
       } catch (error) {
-        log(`sent fetch error: ${error instanceof Error ? error.message : String(error)}`);
+        log(
+          `sent fetch error: ${error instanceof Error ? error.message : String(error)}`,
+        );
       }
 
       await markEmailProcessed(processedSentId);
     }
   } catch (error) {
-    log(`sent poll error: ${error instanceof Error ? error.message : String(error)}`);
+    log(
+      `sent poll error: ${error instanceof Error ? error.message : String(error)}`,
+    );
   }
 }
 
@@ -547,7 +592,9 @@ export function startEmailPolling(
     inboxStore,
     earnestInboxAutomation,
   ).catch((error) =>
-    log(`poll error: ${error instanceof Error ? error.message : String(error)}`),
+    log(
+      `poll error: ${error instanceof Error ? error.message : String(error)}`,
+    ),
   );
 
   pollTimer = setInterval(() => {
@@ -559,7 +606,9 @@ export function startEmailPolling(
       inboxStore,
       earnestInboxAutomation,
     ).catch((error) =>
-      log(`poll error: ${error instanceof Error ? error.message : String(error)}`),
+      log(
+        `poll error: ${error instanceof Error ? error.message : String(error)}`,
+      ),
     );
   }, POLL_INTERVAL_MS);
 }
