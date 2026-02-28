@@ -1,9 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { BottomNav, type AppTab } from "./components/BottomNav";
+import { PropertyNav, type PropertyTab } from "./components/PropertyNav";
 import { Alerts } from "./pages/Alerts";
 import { Home } from "./pages/Home";
-import { PropertyDetail } from "./pages/PropertyDetail";
+import { PropertyDocuments } from "./pages/PropertyDocuments";
+import { PropertyMessages } from "./pages/PropertyMessages";
+import { PropertyPipeline } from "./pages/PropertyPipeline";
 import { Settings } from "./pages/Settings";
 import "./App.css";
 
@@ -15,29 +18,59 @@ function getCurrentPath(): string {
   return window.location.pathname;
 }
 
-function getDealIdFromPath(path: string): string | null {
-  if (!path.startsWith("/property/")) {
-    return null;
+type Route =
+  | { kind: "home" }
+  | { kind: "alerts" }
+  | { kind: "settings" }
+  | {
+      kind: "property";
+      propertyId: string;
+      tab: PropertyTab;
+      needsRedirect: boolean;
+    };
+
+function parseRoute(path: string): Route {
+  const segments = path.split("/").filter(Boolean);
+
+  if (segments[0] === "property" && segments[1]) {
+    const propertyId = decodeURIComponent(segments[1]);
+    const tab = segments[2];
+
+    if (!tab) {
+      return {
+        kind: "property",
+        propertyId,
+        tab: "pipeline",
+        needsRedirect: true,
+      };
+    }
+
+    if (tab === "pipeline" || tab === "messages" || tab === "documents") {
+      return {
+        kind: "property",
+        propertyId,
+        tab,
+        needsRedirect: false,
+      };
+    }
+
+    return {
+      kind: "property",
+      propertyId,
+      tab: "pipeline",
+      needsRedirect: true,
+    };
   }
 
-  const segment = path.replace("/property/", "").trim();
-  if (!segment) {
-    return null;
+  if (segments[0] === "alerts") {
+    return { kind: "alerts" };
   }
 
-  return decodeURIComponent(segment);
-}
-
-function getTabFromPath(path: string): AppTab {
-  if (path.startsWith("/alerts")) {
-    return "alerts";
+  if (segments[0] === "settings") {
+    return { kind: "settings" };
   }
 
-  if (path.startsWith("/settings")) {
-    return "settings";
-  }
-
-  return "home";
+  return { kind: "home" };
 }
 
 function App() {
@@ -62,8 +95,34 @@ function App() {
     [path],
   );
 
-  const activeTab = useMemo(() => getTabFromPath(path), [path]);
-  const activeDealId = useMemo(() => getDealIdFromPath(path), [path]);
+  const route = useMemo(() => parseRoute(path), [path]);
+
+  useEffect(() => {
+    if (route.kind !== "property" || !route.needsRedirect) {
+      return;
+    }
+
+    const normalizedPath = `/property/${encodeURIComponent(route.propertyId)}/pipeline`;
+    if (path === normalizedPath) {
+      return;
+    }
+
+    window.history.replaceState({}, "", normalizedPath);
+    setPath(normalizedPath);
+    window.scrollTo({ top: 0, behavior: "auto" });
+  }, [path, route]);
+
+  const activeTab: AppTab = useMemo(() => {
+    if (route.kind === "alerts") {
+      return "alerts";
+    }
+
+    if (route.kind === "settings") {
+      return "settings";
+    }
+
+    return "home";
+  }, [route]);
 
   const handleTabChange = (tab: AppTab) => {
     if (tab === "home") {
@@ -80,25 +139,58 @@ function App() {
   };
 
   const renderActivePage = () => {
-    if (activeDealId) {
-      return <PropertyDetail dealId={activeDealId} onBack={() => navigate("/")} />;
+    if (route.kind === "property") {
+      const toHome = () => navigate("/");
+
+      if (route.tab === "pipeline") {
+        return <PropertyPipeline propertyId={route.propertyId} onBackToHome={toHome} />;
+      }
+
+      if (route.tab === "messages") {
+        return (
+          <PropertyMessages
+            propertyId={route.propertyId}
+            onBackToHome={toHome}
+          />
+        );
+      }
+
+      return (
+        <PropertyDocuments
+          propertyId={route.propertyId}
+          onBackToHome={toHome}
+        />
+      );
     }
 
-    if (activeTab === "alerts") {
+    if (route.kind === "alerts") {
       return <Alerts />;
     }
 
-    if (activeTab === "settings") {
+    if (route.kind === "settings") {
       return <Settings />;
     }
 
-    return <Home onOpenDeal={(dealId) => navigate(`/property/${encodeURIComponent(dealId)}`)} />;
+    return (
+      <Home
+        onOpenDeal={(dealId) => navigate(`/property/${encodeURIComponent(dealId)}`)}
+      />
+    );
   };
 
   return (
     <div className="app-shell">
       <main className="app-main">{renderActivePage()}</main>
-      <BottomNav activeTab={activeTab} onTabChange={handleTabChange} />
+      {route.kind === "property" ? (
+        <PropertyNav
+          activeTab={route.tab}
+          onTabChange={(tab) =>
+            navigate(`/property/${encodeURIComponent(route.propertyId)}/${tab}`)
+          }
+        />
+      ) : (
+        <BottomNav activeTab={activeTab} onTabChange={handleTabChange} />
+      )}
     </div>
   );
 }

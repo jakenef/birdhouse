@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 
 import { PropertyCard } from "../components/PropertyCard";
+import { TopBar } from "../components/TopBar";
 import { fetchDeals } from "../services/deals";
 import type { Deal } from "../types/deal";
 
@@ -33,15 +34,11 @@ export function Home({ onOpenDeal }: HomeProps) {
 
   return (
     <section className="home-page" aria-label="Home page">
-      <header className="home-header">
-        <div className="home-header__icon" aria-hidden>
-          <BirdhouseIcon />
-        </div>
-        <div>
-          <h1>Birdhouse</h1>
-          <p>{deals.length} active · sorted by recent</p>
-        </div>
-      </header>
+      <TopBar
+        title="Birdhouse"
+        subtitle={`${deals.length} active · sorted by recent`}
+        leftIcon={<BirdhouseIcon />}
+      />
 
       {errorMessage && <p className="inline-alert">{errorMessage}</p>}
 
