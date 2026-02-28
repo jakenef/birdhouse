@@ -252,7 +252,12 @@ function mapApiPropertyToDeal(property: ApiProperty, index: number): Deal {
   const daysToClose = daysUntil(closeDateIso);
   const urgency = urgencyFromDays(daysToClose);
 
-  const propertyEmail = property.property_email ?? property.propertyEmail ?? null;
+  const rawPropertyEmail = property.property_email ?? property.propertyEmail;
+  const propertyEmail =
+    typeof rawPropertyEmail === "string" &&
+    rawPropertyEmail.trim().includes("@")
+      ? rawPropertyEmail.trim()
+      : null;
 
   return {
     id: property.id,

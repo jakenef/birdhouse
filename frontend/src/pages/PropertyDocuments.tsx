@@ -1,8 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 
-import { PropertyHeader } from "../components/PropertyHeader";
 import { getPropertyDocuments } from "../services/documents";
-import type { Document, PropertyDocumentsProperty } from "../types/document";
+import type { Document } from "../types/document";
 
 interface PropertyDocumentsProps {
   propertyId: string;
@@ -15,24 +14,6 @@ type DocumentCardModel = {
   aiSummary: string;
   summaryHighlights: string[];
 };
-
-function formatLocation(property: PropertyDocumentsProperty | null): string {
-  if (!property) {
-    return "Location unavailable";
-  }
-
-  const locationParts = [property.city, property.state].filter(
-    (value): value is string => Boolean(value && value.trim().length > 0),
-  );
-
-  if (locationParts.length === 0 && !property.zip) {
-    return "Location unavailable";
-  }
-
-  return [locationParts.join(", "), property.zip]
-    .filter((value): value is string => Boolean(value && value.trim().length > 0))
-    .join(" ");
-}
 
 function formatDocumentDate(createdAt: string): string {
   const parsed = new Date(createdAt);
@@ -142,7 +123,6 @@ export function PropertyDocuments({
   propertyId,
   onBackToHome,
 }: PropertyDocumentsProps) {
-  const [property, setProperty] = useState<PropertyDocumentsProperty | null>(null);
   const [documents, setDocuments] = useState<Document[]>([]);
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -156,7 +136,6 @@ export function PropertyDocuments({
 
       try {
         const response = await getPropertyDocuments(propertyId);
-        setProperty(response.property);
         setDocuments(response.property.documents);
       } catch (error) {
         setErrorMessage(
@@ -171,14 +150,6 @@ export function PropertyDocuments({
 
     void loadDocuments();
   }, [propertyId]);
-
-  const address = useMemo(() => {
-    if (!property) {
-      return "Property";
-    }
-
-    return property.address_full || property.property_name;
-  }, [property]);
 
   const cards = useMemo(() => documents.map((document) => toCardModel(document)), [documents]);
 
@@ -233,12 +204,6 @@ export function PropertyDocuments({
 
   return (
     <section className="property-page" aria-label="Property documents page">
-      <PropertyHeader
-        imageUrl={property?.street_view.image_url ?? null}
-        address={address}
-        location={formatLocation(property)}
-      />
-
       <button type="button" className="back-link" onClick={onBackToHome}>
         <ChevronLeftIcon />
         Back to home

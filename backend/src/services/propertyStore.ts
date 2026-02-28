@@ -1,5 +1,6 @@
 import { ParsedPurchaseContract } from "../schemas/parsedPurchaseContract.schema";
 import { StoredPropertyRecord, StreetViewCacheEntry } from "../types/property";
+import { PropertyWorkflowState } from "../types/workflow";
 
 export interface PropertyStore {
   list(): Promise<StoredPropertyRecord[]>;
@@ -7,6 +8,11 @@ export interface PropertyStore {
   findByDocHash(docHash: string): Promise<StoredPropertyRecord | null>;
   findById(id: string): Promise<StoredPropertyRecord | null>;
   findByPropertyEmail(email: string): Promise<StoredPropertyRecord | null>;
+  getWorkflowState(propertyId: string): Promise<PropertyWorkflowState | null>;
+  updateWorkflowState(
+    id: string,
+    workflowState: PropertyWorkflowState,
+  ): Promise<StoredPropertyRecord>;
   updateStreetView(
     id: string,
     streetView: StreetViewCacheEntry,

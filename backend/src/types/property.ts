@@ -1,4 +1,5 @@
 import { ParsedPurchaseContract } from "../schemas/parsedPurchaseContract.schema";
+import { PropertyWorkflowState } from "./workflow";
 
 export type StreetViewStatus = "available" | "unavailable" | "error";
 
@@ -23,6 +24,7 @@ export type StoredPropertyRecord = {
   created_at_iso: string;
   updated_at_iso: string;
   parsed_contract: ParsedPurchaseContract;
+  workflow_state?: PropertyWorkflowState;
   street_view?: StreetViewCacheEntry;
 };
 

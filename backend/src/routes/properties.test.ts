@@ -3,12 +3,19 @@ import request from "supertest";
 import { describe, expect, it, beforeEach } from "vitest";
 
 import { ParsedPurchaseContract } from "../schemas/parsedPurchaseContract.schema";
+import { DocumentStore } from "../services/documentStore";
+import {
+  EarnestWorkflowError,
+  EarnestWorkflowService,
+} from "../services/earnestWorkflow";
 import { StreetViewService } from "../services/googleStreetView";
+import { PropertyEmailSender } from "../services/propertyEmailSender";
 import {
   DuplicatePropertyError,
   PropertyStore,
 } from "../services/propertyStore";
 import { StoredPropertyRecord, StreetViewCacheEntry } from "../types/property";
+import { PropertyWorkflowState } from "../types/workflow";
 import { createPropertiesRouter } from "./properties";
 
 function buildParsedContract(docHash: string): ParsedPurchaseContract {
@@ -94,6 +101,7 @@ class InMemoryPropertyStore implements PropertyStore {
     const record: StoredPropertyRecord = {
       id: `prop_${this.records.length + 1}`,
       property_name: parsedContract.property.address_full || "Unnamed Property",
+      property_email: `property-${this.records.length + 1}@demo.test`,
       created_at_iso: `2026-02-28T00:00:0${this.records.length}.000Z`,
       updated_at_iso: `2026-02-28T00:00:0${this.records.length}.000Z`,
       parsed_contract: parsedContract,
@@ -115,6 +123,24 @@ class InMemoryPropertyStore implements PropertyStore {
     return this.records.find((record) => record.id === id) || null;
   }
 
+  async getWorkflowState(propertyId: string): Promise<PropertyWorkflowState | null> {
+    return (await this.findById(propertyId))?.workflow_state || null;
+  }
+
+  async updateWorkflowState(
+    id: string,
+    workflowState: PropertyWorkflowState,
+  ): Promise<StoredPropertyRecord> {
+    const record = await this.findById(id);
+    if (!record) {
+      throw new Error("not found");
+    }
+
+    record.workflow_state = workflowState;
+    record.updated_at_iso = "2026-02-28T00:10:00.000Z";
+    return record;
+  }
+
   async updateStreetView(
     id: string,
     streetView: StreetViewCacheEntry,
@@ -127,6 +153,135 @@ class InMemoryPropertyStore implements PropertyStore {
     record.street_view = streetView;
     record.updated_at_iso = "2026-02-28T00:10:00.000Z";
     return record;
+  }
+}
+
+class StubDocumentStore {
+  async listByPropertyId() {
+    return [];
+  }
+
+  async findById() {
+    return null;
+  }
+}
+
+class StubPropertyEmailSender {
+  async send(input: {
+    from: string;
+    to: string[];
+    subject: string;
+  }) {
+    return {
+      id: "msg_123",
+      thread_id: "thread_123",
+      sent_at: "2026-02-28T00:20:00.000Z",
+      from: input.from,
+      to: input.to,
+      subject: input.subject,
+    };
+  }
+}
+
+class StubEarnestWorkflowService {
+  async getEarnestStep(propertyId: string) {
+    if (propertyId === "prop_missing") {
+      throw new EarnestWorkflowError("Property not found.");
+    }
+
+    return {
+      property_id: propertyId,
+      property_email: "123-main@demo.test",
+      current_label: "earnest_money" as const,
+      step_status: "locked" as const,
+      locked_reason: "Escrow officer contact is missing.",
+      prompt_to_user: "Add your escrow officer contact to prepare the earnest email.",
+      contact: null,
+      attachment: null,
+      draft: {
+        subject: null,
+        body: null,
+        generated_at_iso: null,
+        openai_model: null,
+        generation_reason: null,
+      },
+      send_state: {
+        thread_id: null,
+        message_id: null,
+        sent_at_iso: null,
+      },
+    };
+  }
+
+  async prepareEarnestStep(propertyId: string) {
+    return {
+      property_id: propertyId,
+      property_email: "123-main@demo.test",
+      current_label: "earnest_money" as const,
+      step_status: "action_needed" as const,
+      locked_reason: null,
+      prompt_to_user: null,
+      contact: {
+        type: "escrow_officer" as const,
+        name: "Sarah Chen",
+        email: "sarah@titleco.com",
+        company: "TitleCo",
+      },
+      attachment: {
+        document_id: "doc_1",
+        filename: "purchase-contract.pdf",
+      },
+      draft: {
+        subject: "Earnest Money - 123 Main",
+        body: "Hi Sarah",
+        generated_at_iso: "2026-02-28T00:00:00.000Z",
+        openai_model: "gpt-4.1",
+        generation_reason: "Simple earnest draft.",
+      },
+      send_state: {
+        thread_id: null,
+        message_id: null,
+        sent_at_iso: null,
+      },
+    };
+  }
+
+  async sendEarnestDraft(propertyId: string, input: { subject: string; body: string }) {
+    if (propertyId === "prop_locked") {
+      throw new EarnestWorkflowError(
+        "Earnest draft can only be sent when the step is action_needed.",
+      );
+    }
+
+    return {
+      property_id: propertyId,
+      property_email: "123-main@demo.test",
+      current_label: "earnest_money" as const,
+      step_status: "waiting_for_parties" as const,
+      locked_reason: null,
+      prompt_to_user: null,
+      contact: {
+        type: "escrow_officer" as const,
+        name: "Sarah Chen",
+        email: "sarah@titleco.com",
+      },
+      attachment: {
+        document_id: "doc_1",
+        filename: "purchase-contract.pdf",
+      },
+      draft: {
+        subject: input.subject,
+        body: input.body,
+        generated_at_iso: "2026-02-28T00:00:00.000Z",
+        openai_model: "gpt-4.1",
+        generation_reason: "Simple earnest draft.",
+      },
+      send_state: {
+        thread_id: "thread_123",
+        message_id: "msg_123",
+        sent_at_iso: "2026-02-28T00:20:00.000Z",
+      },
+    };
   }
 }
 
@@ -163,7 +318,16 @@ describe("properties routes", () => {
     store = new InMemoryPropertyStore();
     app = express();
     app.use(express.json());
-    app.use("/api", createPropertiesRouter(store, new StubStreetViewService()));
+    app.use(
+      "/api",
+      createPropertiesRouter(
+        store,
+        new StubStreetViewService(),
+        new StubDocumentStore() as unknown as DocumentStore,
+        new StubEarnestWorkflowService() as unknown as EarnestWorkflowService,
+        new StubPropertyEmailSender() as unknown as PropertyEmailSender,
+      ),
+    );
   });
 
   it("accepts a valid parsed contract", async () => {
@@ -251,5 +415,73 @@ describe("properties routes", () => {
     const response = await request(app).get("/api/properties/prop_missing/street-view");
 
     expect(response.status).toBe(404);
+  });
+
+  it("returns the earnest pipeline state", async () => {
+    await request(app).post("/api/properties").send(buildParsedContract("doc-1"));
+
+    const response = await request(app).get("/api/properties/prop_1/pipeline/earnest");
+
+    expect(response.status).toBe(200);
+    expect(response.body.earnest.step_status).toBe("locked");
+  });
+
+  it("prepares the earnest draft", async () => {
+    await request(app).post("/api/properties").send(buildParsedContract("doc-1"));
+
+    const response = await request(app).post(
+      "/api/properties/prop_1/pipeline/earnest/prepare",
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.body.earnest.step_status).toBe("action_needed");
+    expect(response.body.earnest.draft.subject).toBe("Earnest Money - 123 Main");
+  });
+
+  it("rejects earnest send requests without subject or body", async () => {
+    await request(app).post("/api/properties").send(buildParsedContract("doc-1"));
+
+    const missingSubject = await request(app)
+      .post("/api/properties/prop_1/pipeline/earnest/send")
+      .send({ body: "Hi Sarah" });
+
+    expect(missingSubject.status).toBe(400);
+
+    const missingBody = await request(app)
+      .post("/api/properties/prop_1/pipeline/earnest/send")
+      .send({ subject: "Earnest Money - 123 Main" });
+
+    expect(missingBody.status).toBe(400);
+  });
+
+  it("sends the earnest draft and returns waiting_for_parties", async () => {
+    await request(app).post("/api/properties").send(buildParsedContract("doc-1"));
+
+    const response = await request(app)
+      .post("/api/properties/prop_1/pipeline/earnest/send")
+      .send({
+        subject: "Earnest Money - 123 Main",
+        body: "Hi Sarah",
+      });
+
+    expect(response.status).toBe(201);
+    expect(response.body.earnest.step_status).toBe("waiting_for_parties");
+    expect(response.body.earnest.send_state.message_id).toBe("msg_123");
+  });
+
+  it("uses the shared mocked sender for inbox send", async () => {
+    await request(app).post("/api/properties").send(buildParsedContract("doc-1"));
+
+    const response = await request(app)
+      .post("/api/properties/prop_1/inbox/send")
+      .send({
+        to: ["sarah@titleco.com"],
+        subject: "Re: Earnest Money",
+        body: "Following up",
+      });
+
+    expect(response.status).toBe(201);
+    expect(response.body.message.id).toBe("msg_123");
+    expect(response.body.message.thread_id).toBe("thread_123");
   });
 });

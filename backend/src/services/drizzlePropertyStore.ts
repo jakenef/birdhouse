@@ -6,8 +6,9 @@ import { properties, type NewProperty } from "../db/schema";
 import { ParsedPurchaseContract } from "../schemas/parsedPurchaseContract.schema";
 import { DuplicatePropertyError, PropertyStore } from "./propertyStore";
 import { StoredPropertyRecord, StreetViewCacheEntry } from "../types/property";
+import { PropertyWorkflowState } from "../types/workflow";
 import { derivePropertyName } from "../utils/propertyName";
-import { buildPropertyEmail, generateEmailSlug } from "../utils/emailSlug";
+import { generateEmailSlug } from "../utils/emailSlug";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -79,6 +80,9 @@ function rowToStoredRecord(
     created_at_iso: row.createdAt,
     updated_at_iso: row.updatedAt,
     parsed_contract: contract,
+    workflow_state: row.workflowStateJson
+      ? (JSON.parse(row.workflowStateJson) as PropertyWorkflowState)
+      : undefined,
     street_view: row.streetViewJson
       ? JSON.parse(row.streetViewJson)
       : undefined,
@@ -190,6 +194,33 @@ export class DrizzlePropertyStore implements PropertyStore {
 
     if (rows.length === 0) return null;
     return rowToStoredRecord(rows[0]);
+  }
+
+  async getWorkflowState(propertyId: string): Promise<PropertyWorkflowState | null> {
+    const property = await this.findById(propertyId);
+    return property?.workflow_state || null;
+  }
+
+  async updateWorkflowState(
+    id: string,
+    workflowState: PropertyWorkflowState,
+  ): Promise<StoredPropertyRecord> {
+    const now = new Date().toISOString();
+
+    await db
+      .update(properties)
+      .set({
+        workflowStateJson: JSON.stringify(workflowState),
+        updatedAt: now,
+      })
+      .where(eq(properties.id, id));
+
+    const updated = await this.findById(id);
+    if (!updated) {
+      throw new Error(`Property ${id} not found after workflow update`);
+    }
+
+    return updated;
   }
 
   async updateStreetView(

@@ -1,3 +1,10 @@
+import {
+  useEffect,
+  useState,
+  type KeyboardEvent,
+  type MouseEvent,
+} from "react";
+
 import type { Deal } from "../types/deal";
 import { StatusPill, type StatusPillVariant } from "./StatusPill";
 
@@ -39,6 +46,24 @@ function formatDate(isoDate: string): string {
 
 function formatCityState(value: string): string {
   return value.replace(/\s+\d{5}(?:-\d{4})?$/, "");
+}
+
+function formatInboxEmail(value: string): string {
+  const email = value.trim();
+  const atIndex = email.lastIndexOf("@");
+
+  if (atIndex <= 0) {
+    return email;
+  }
+
+  const localPart = email.slice(0, atIndex);
+  const domain = email.slice(atIndex);
+
+  if (localPart.length <= 18) {
+    return email;
+  }
+
+  return `${localPart.slice(0, 18)}...${domain}`;
 }
 
 function statusVariant(status: string): StatusPillVariant {
@@ -99,6 +124,46 @@ function urgencyVariant(
 }
 
 export function PropertyCard({ deal, onOpenDeal }: PropertyCardProps) {
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    if (!copied) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => setCopied(false), 1400);
+    return () => window.clearTimeout(timeoutId);
+  }, [copied]);
+
+  const copyInbox = async (
+    event: MouseEvent<HTMLSpanElement> | KeyboardEvent<HTMLSpanElement>,
+  ) => {
+    event.preventDefault();
+    event.stopPropagation();
+
+    if (!deal.propertyEmail) {
+      return;
+    }
+
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(deal.propertyEmail);
+      } else {
+        const textarea = document.createElement("textarea");
+        textarea.value = deal.propertyEmail;
+        textarea.style.position = "fixed";
+        textarea.style.opacity = "0";
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand("copy");
+        document.body.removeChild(textarea);
+      }
+      setCopied(true);
+    } catch {
+      setCopied(false);
+    }
+  };
+
   return (
     <button
       type="button"
@@ -151,9 +216,26 @@ export function PropertyCard({ deal, onOpenDeal }: PropertyCardProps) {
       <p className="deal-card__inbox">
         <MailIcon />
         <span className="deal-card__inbox-label">Property inbox</span>
-        <span className="deal-card__inbox-value">
-          {deal.propertyEmail || "Unavailable"}
+        <span className="deal-card__inbox-value" title={deal.propertyEmail || "Unavailable"}>
+          {deal.propertyEmail ? formatInboxEmail(deal.propertyEmail) : "Unavailable"}
         </span>
+        {deal.propertyEmail ? (
+          <span
+            className={`deal-card__inbox-copy${copied ? " is-copied" : ""}`}
+            role="button"
+            tabIndex={0}
+            aria-label={copied ? "Copied inbox email" : "Copy inbox email"}
+            title={copied ? "Copied" : "Copy inbox email"}
+            onClick={(event) => void copyInbox(event)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" || event.key === " ") {
+                void copyInbox(event);
+              }
+            }}
+          >
+            {copied ? <CheckIcon /> : <CopyIcon />}
+          </span>
+        ) : null}
       </p>
     </button>
   );
@@ -178,6 +260,46 @@ function MailIcon() {
         fill="none"
         stroke="currentColor"
         strokeWidth="1.7"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function CopyIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <rect
+        x="9"
+        y="9"
+        width="10"
+        height="10"
+        rx="1.8"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+      />
+      <path
+        d="M14 9V7.2A1.2 1.2 0 0 0 12.8 6H6.2A1.2 1.2 0 0 0 5 7.2v6.6A1.2 1.2 0 0 0 6.2 15H9"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function CheckIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path
+        d="m5.5 12.4 4.1 4.1 8.9-8.9"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
         strokeLinecap="round"
         strokeLinejoin="round"
       />
