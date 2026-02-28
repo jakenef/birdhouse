@@ -4,6 +4,11 @@ export interface Document {
   mime_type: string;
   size_bytes: number | null;
   source: string | null;
+  ai_summary: {
+    title: string;
+    summary: string;
+    highlights: string[];
+  } | null;
   created_at: string;
   download_url: string;
 }

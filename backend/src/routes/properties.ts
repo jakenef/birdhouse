@@ -338,6 +338,7 @@ export function createPropertiesRouter(
             mime_type: doc.mime_type,
             size_bytes: doc.size_bytes,
             source: doc.source,
+            ai_summary: doc.ai_summary,
             created_at: doc.created_at,
             download_url: `/api/properties/${record.id}/documents/${doc.id}/download`,
           })),

@@ -12,6 +12,7 @@ import { PropertyStore, DuplicatePropertyError } from "./propertyStore";
 import { DocumentStore } from "./documentStore";
 import { EarnestWorkflowService } from "./earnestWorkflow";
 import { InboxStore } from "./inboxStore";
+import { extractContractSummary, summarizePdf } from "./documentSummarizer";
 import { db } from "../db";
 import { processedEmails } from "../db/schema";
 
@@ -141,6 +142,7 @@ async function processIntakeEmail(
   const record = await store.create(parsedContract);
 
   // Store a document record linking the PDF to this property
+  const aiSummary = extractContractSummary(parsedContract);
   await docStore.create({
     propertyId: record.id,
     filename: att.filename || "attachment.pdf",
@@ -149,6 +151,7 @@ async function processIntakeEmail(
     sizeBytes: pdfBuffer.length,
     docHash,
     source: "email_intake",
+    aiSummary,
   });
 
   try {
@@ -170,7 +173,7 @@ async function processIntakeEmail(
 
 /**
  * Process an email sent to a property-specific address (adds document to EXISTING property).
- * Skips parsing pipeline — just saves PDF and creates document record.
+ * Generates AI summary for the PDF and stores it with the document.
  */
 async function processPropertyEmail(
   propertyEmail: string,
@@ -189,6 +192,20 @@ async function processPropertyEmail(
     return;
   }
 
+  // Generate AI summary for the PDF
+  let aiSummary = null;
+  try {
+    aiSummary = await summarizePdf({
+      buffer: pdfBuffer,
+      filename: att.filename || "attachment.pdf",
+      timeoutMs: REQUEST_TIMEOUT_MS,
+    });
+  } catch (error) {
+    log(
+      `warning: AI summary generation failed: ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
+
   // Create document record (allow multiple docs with same hash for same property)
   await docStore.create({
     propertyId: property.id,
@@ -198,6 +215,7 @@ async function processPropertyEmail(
     sizeBytes: pdfBuffer.length,
     docHash,
     source: "email_intake",
+    aiSummary,
   });
 
   log(

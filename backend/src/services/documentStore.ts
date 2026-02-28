@@ -17,6 +17,11 @@ export type StoredDocument = {
   size_bytes: number | null;
   doc_hash: string | null;
   source: string | null;
+  ai_summary: {
+    title: string;
+    summary: string;
+    highlights: string[];
+  } | null;
   created_at: string;
 };
 
@@ -28,6 +33,11 @@ export type CreateDocumentInput = {
   sizeBytes?: number;
   docHash?: string;
   source?: string;
+  aiSummary?: {
+    title: string;
+    summary: string;
+    highlights: string[];
+  } | null;
 };
 
 // ---------------------------------------------------------------------------
@@ -50,6 +60,7 @@ function rowToStoredDocument(
     size_bytes: row.sizeBytes,
     doc_hash: row.docHash,
     source: row.source,
+    ai_summary: row.aiSummary as StoredDocument["ai_summary"],
     created_at: row.createdAt,
   };
 }
@@ -96,6 +107,7 @@ export class DocumentStore {
       sizeBytes: input.sizeBytes ?? null,
       docHash: input.docHash ?? null,
       source: input.source ?? "email_intake",
+      aiSummary: input.aiSummary ?? null,
       createdAt: now,
     };
 
@@ -110,6 +122,7 @@ export class DocumentStore {
       size_bytes: input.sizeBytes ?? null,
       doc_hash: input.docHash ?? null,
       source: input.source ?? "email_intake",
+      ai_summary: input.aiSummary ?? null,
       created_at: now,
     };
   }

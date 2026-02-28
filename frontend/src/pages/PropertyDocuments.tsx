@@ -28,7 +28,9 @@ function formatDocumentDate(createdAt: string): string {
   }).format(parsed);
 }
 
-function buildMockAiContent(document: Document): Omit<DocumentCardModel, "document"> {
+function buildMockAiContent(
+  document: Document,
+): Omit<DocumentCardModel, "document"> {
   const normalizedFilename = document.filename.toLowerCase();
 
   if (normalizedFilename.includes("contract")) {
@@ -96,6 +98,16 @@ function buildMockAiContent(document: Document): Omit<DocumentCardModel, "docume
 }
 
 function toCardModel(document: Document): DocumentCardModel {
+  // Use real AI summary if available, otherwise fall back to mock
+  if (document.ai_summary) {
+    return {
+      document,
+      aiTitle: document.ai_summary.title,
+      aiSummary: document.ai_summary.summary,
+      summaryHighlights: document.ai_summary.highlights,
+    };
+  }
+
   return {
     document,
     ...buildMockAiContent(document),
@@ -151,7 +163,10 @@ export function PropertyDocuments({
     void loadDocuments();
   }, [propertyId]);
 
-  const cards = useMemo(() => documents.map((document) => toCardModel(document)), [documents]);
+  const cards = useMemo(
+    () => documents.map((document) => toCardModel(document)),
+    [documents],
+  );
 
   const activeCard = useMemo(
     () => cards.find((card) => card.document.id === activeDocumentId) ?? null,
@@ -210,7 +225,11 @@ export function PropertyDocuments({
       </button>
 
       {loading ? (
-        <div className="state-card state-card--loading" role="status" aria-live="polite">
+        <div
+          className="state-card state-card--loading"
+          role="status"
+          aria-live="polite"
+        >
           Loading documents...
         </div>
       ) : errorMessage ? (
@@ -221,7 +240,9 @@ export function PropertyDocuments({
       ) : cards.length === 0 ? (
         <div className="state-card" role="status" aria-live="polite">
           <h2>No documents yet</h2>
-          <p>Documents for this property will appear here as they are attached.</p>
+          <p>
+            Documents for this property will appear here as they are attached.
+          </p>
         </div>
       ) : (
         <div className="documents-list-wrap" aria-label="Documents list">
@@ -239,7 +260,8 @@ export function PropertyDocuments({
                     <div className="document-card__ai-badge">
                       <AiSparkleIcon />
                     </div>
-                    {card.document.download_url && isPdfDocument(card.document) ? (
+                    {card.document.download_url &&
+                    isPdfDocument(card.document) ? (
                       <iframe
                         src={`${card.document.download_url}#toolbar=0&navpanes=0&scrollbar=0&page=1&view=FitH`}
                         title=""
@@ -253,7 +275,9 @@ export function PropertyDocuments({
                   </div>
                   <div className="document-card__body">
                     <h2 className="document-card__ai-title">{card.aiTitle}</h2>
-                    <p className="document-card__file-title">{card.document.filename}</p>
+                    <p className="document-card__file-title">
+                      {card.document.filename}
+                    </p>
                     <p className="document-card__date">
                       Uploaded {formatDocumentDate(card.document.created_at)}
                     </p>
@@ -276,7 +300,9 @@ export function PropertyDocuments({
           >
             <div className="document-sheet__handle" aria-hidden="true" />
             <h2>{activeCard.aiTitle}</h2>
-            <p className="document-sheet__file-title">{activeCard.document.filename}</p>
+            <p className="document-sheet__file-title">
+              {activeCard.document.filename}
+            </p>
             <p className="document-sheet__date">
               Uploaded {formatDocumentDate(activeCard.document.created_at)}
             </p>
@@ -325,13 +351,18 @@ export function PropertyDocuments({
                 <h2>{viewerCard.aiTitle}</h2>
                 <p>{viewerCard.document.filename}</p>
               </div>
-              <button type="button" className="document-viewer__close" onClick={closeViewer}>
+              <button
+                type="button"
+                className="document-viewer__close"
+                onClick={closeViewer}
+              >
                 Close
               </button>
             </header>
 
             <div className="document-viewer__content">
-              {viewerCard.document.download_url && isPdfDocument(viewerCard.document) ? (
+              {viewerCard.document.download_url &&
+              isPdfDocument(viewerCard.document) ? (
                 <iframe
                   src={`${viewerCard.document.download_url}#toolbar=1&navpanes=0&view=FitH`}
                   title={viewerCard.document.filename}
@@ -340,7 +371,10 @@ export function PropertyDocuments({
                 <div className="document-viewer__fallback">
                   <p>This file type cannot be previewed inline yet.</p>
                   {viewerCard.document.download_url ? (
-                    <a href={viewerCard.document.download_url} download={viewerCard.document.filename}>
+                    <a
+                      href={viewerCard.document.download_url}
+                      download={viewerCard.document.filename}
+                    >
                       Download file
                     </a>
                   ) : null}
