@@ -34,5 +34,8 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 
+# Intake PDFs
+data/intake-pdfs/
+
 # OS
 Thumbs.db

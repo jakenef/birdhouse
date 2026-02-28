@@ -7,6 +7,7 @@ import multer from "multer";
 import { parseRouter } from "./routes/parse";
 import { createPropertiesRouter } from "./routes/properties";
 import { FilePropertyStore } from "./services/filePropertyStore";
+import { startEmailPolling } from "./services/emailIntake";
 
 const app = express();
 const port = Number(process.env.PORT || "3001");
@@ -50,6 +51,9 @@ app.use((error: unknown, _req: Request, res: Response, _next: NextFunction) => {
 });
 
 app.listen(port, () => {
+  // Start email intake polling
+  startEmailPolling();
+
   console.log(
     JSON.stringify({
       event: "server_started",
