@@ -4,15 +4,25 @@ interface TopBarProps {
   title: string;
   subtitle?: string;
   leftIcon?: ReactNode;
+  leftIconStyle?: "badge" | "standalone";
   rightAction?: ReactNode;
 }
 
-export function TopBar({ title, subtitle, leftIcon, rightAction }: TopBarProps) {
+export function TopBar({
+  title,
+  subtitle,
+  leftIcon,
+  leftIconStyle = "badge",
+  rightAction,
+}: TopBarProps) {
   return (
     <header className="top-bar">
       <div className="top-bar__leading">
         {leftIcon && (
-          <div className="top-bar__icon" aria-hidden>
+          <div
+            className={`top-bar__icon ${leftIconStyle === "standalone" ? "top-bar__icon--standalone" : ""}`}
+            aria-hidden
+          >
             {leftIcon}
           </div>
         )}
