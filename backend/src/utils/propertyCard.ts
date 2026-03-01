@@ -20,6 +20,7 @@ export function toPropertyCardDto(
     sellers: contract.parties.sellers,
     effective_date: contract.key_dates.effective_date,
     settlement_deadline: contract.key_dates.settlement_deadline,
+    pipeline_stage: record.pipeline_stage,
     created_at_iso: record.created_at_iso,
     updated_at_iso: record.updated_at_iso,
     street_view: {

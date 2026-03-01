@@ -4,8 +4,11 @@ import { EmailComposer, type ComposerMode } from "../components/EmailComposer";
 import { InboxDrawer } from "../components/InboxDrawer";
 import { InboxThreadRow } from "../components/InboxThreadRow";
 import { InboxTopBar } from "../components/InboxTopBar";
-import { PropertyHomeButton } from "../components/PropertyHomeButton";
-import { consumeInboxToast, listPropertyEmails, sendEmail } from "../services/inbox";
+import {
+  consumeInboxToast,
+  listPropertyEmails,
+  sendEmail,
+} from "../services/inbox";
 import type {
   ListPropertyEmailsResult,
   MailboxFilter,
@@ -36,7 +39,6 @@ function searchMatches(thread: ThreadListItem, search: string): boolean {
 
 export function PropertyInbox({
   propertyId,
-  onBackToHome,
   onOpenThread,
 }: PropertyInboxProps) {
   const [inbox, setInbox] = useState<ListPropertyEmailsResult | null>(null);
@@ -49,6 +51,8 @@ export function PropertyInbox({
   const [composeMode] = useState<ComposerMode>("new");
   const [sendingCompose, setSendingCompose] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [demoThreads, setDemoThreads] = useState<ThreadListItem[]>([]);
+  const [demoControlsOpen, setDemoControlsOpen] = useState(false);
 
   const loadInbox = useCallback(async () => {
     setLoading(true);
@@ -60,7 +64,9 @@ export function PropertyInbox({
       });
       setInbox(response);
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : "Unable to load inbox.");
+      setErrorMessage(
+        error instanceof Error ? error.message : "Unable to load inbox.",
+      );
     } finally {
       setLoading(false);
     }
@@ -82,12 +88,63 @@ export function PropertyInbox({
   }, [propertyId, inbox]);
 
   const visibleThreads = useMemo(() => {
-    if (!inbox) {
+    const baseThreads = inbox?.threads || [];
+    const allThreads = [...demoThreads, ...baseThreads];
+
+    if (allThreads.length === 0) {
       return [];
     }
 
-    return inbox.threads.filter((thread) => searchMatches(thread, search));
-  }, [inbox, search]);
+    return allThreads.filter(
+      (thread) =>
+        thread.mailboxLabel === activeMailbox && searchMatches(thread, search),
+    );
+  }, [inbox, demoThreads, activeMailbox, search]);
+
+  const fillDemoInbox = () => {
+    const mockThreads: ThreadListItem[] = [
+      {
+        id: "demo-thread-1",
+        subject: "Earnest Money Deposit Confirmation",
+        fromName: "Sarah Johnson",
+        fromEmail: "sarah@titleco.com",
+        snippet:
+          "We've received your earnest money deposit and it's being held in escrow...",
+        sentAt: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
+        read: false,
+        hasAttachments: true,
+        mailboxLabel: "primary" as const,
+        pipelineLabel: "earnest_money" as const,
+      },
+      {
+        id: "demo-thread-2",
+        subject: "Inspection Report Available",
+        fromName: "Mike Chen",
+        fromEmail: "mike@homeinspectors.com",
+        snippet:
+          "The full inspection report is now ready for your review. Overall the property is in good condition...",
+        sentAt: new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString(),
+        read: false,
+        hasAttachments: true,
+        mailboxLabel: "primary" as const,
+        pipelineLabel: "due_diligence_inspection" as const,
+      },
+      {
+        id: "demo-thread-3",
+        subject: "Title Search Complete",
+        fromName: "Laura Martinez",
+        fromEmail: "laura@titleco.com",
+        snippet:
+          "Good news! The preliminary title report came back clean with no major issues...",
+        sentAt: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
+        read: true,
+        hasAttachments: true,
+        mailboxLabel: "primary" as const,
+        pipelineLabel: "title_escrow" as const,
+      },
+    ];
+    setDemoThreads(mockThreads);
+  };
 
   const handleComposeSend = async (payload: SendEmailInput) => {
     setSendingCompose(true);
@@ -100,8 +157,41 @@ export function PropertyInbox({
   };
 
   return (
-    <section className="property-page bh-inbox-page" aria-label="Property inbox list">
-      <PropertyHomeButton onClick={onBackToHome} />
+    <section
+      className="property-page bh-inbox-page"
+      aria-label="Property inbox list"
+    >
+      <div className="demo-controls">
+        <button
+          type="button"
+          className="demo-controls__toggle"
+          onClick={() => setDemoControlsOpen(!demoControlsOpen)}
+          aria-expanded={demoControlsOpen}
+        >
+          {demoControlsOpen ? "▼" : "▶"} Demo Controls
+        </button>
+        {demoControlsOpen && (
+          <div className="demo-controls__content">
+            <button
+              type="button"
+              className="demo-controls__button"
+              onClick={fillDemoInbox}
+              disabled={demoThreads.length > 0}
+            >
+              Fill Inbox
+            </button>
+            {demoThreads.length > 0 && (
+              <button
+                type="button"
+                className="demo-controls__button demo-controls__button--secondary"
+                onClick={() => setDemoThreads([])}
+              >
+                Clear Demo
+              </button>
+            )}
+          </div>
+        )}
+      </div>
 
       <InboxTopBar
         searchValue={search}
@@ -121,20 +211,30 @@ export function PropertyInbox({
         <div className="state-card" role="alert">
           <h2>Unable to load inbox</h2>
           <p>{errorMessage}</p>
-          <button type="button" className="state-card__action" onClick={() => void loadInbox()}>
+          <button
+            type="button"
+            className="state-card__action"
+            onClick={() => void loadInbox()}
+          >
             Retry
           </button>
         </div>
       ) : visibleThreads.length === 0 ? (
         <div className="state-card" role="status" aria-live="polite">
           <h2>No emails yet</h2>
-          <p>Forward emails/documents to the property inbox to start the thread.</p>
+          <p>
+            Forward emails/documents to the property inbox to start the thread.
+          </p>
         </div>
       ) : (
         <div className="bh-inbox-list-wrap" aria-label="Email thread list">
           <ul className="bh-inbox-list">
             {visibleThreads.map((thread) => (
-              <InboxThreadRow key={thread.id} thread={thread} onOpenThread={onOpenThread} />
+              <InboxThreadRow
+                key={thread.id}
+                thread={thread}
+                onOpenThread={onOpenThread}
+              />
             ))}
           </ul>
         </div>

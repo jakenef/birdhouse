@@ -24,6 +24,7 @@ export type StoredPropertyRecord = {
   created_at_iso: string;
   updated_at_iso: string;
   parsed_contract: ParsedPurchaseContract;
+  pipeline_stage: string;
   workflow_state?: PropertyWorkflowState;
   street_view?: StreetViewCacheEntry;
 };
@@ -42,6 +43,7 @@ export type PropertyCardDto = {
   sellers: string[];
   effective_date: string | null;
   settlement_deadline: string | null;
+  pipeline_stage: string;
   created_at_iso: string;
   updated_at_iso: string;
   street_view: {

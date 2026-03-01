@@ -80,6 +80,7 @@ function rowToStoredRecord(
     created_at_iso: row.createdAt,
     updated_at_iso: row.updatedAt,
     parsed_contract: contract,
+    pipeline_stage: row.pipelineStage ?? "earnest_money",
     workflow_state: row.workflowStateJson
       ? (JSON.parse(row.workflowStateJson) as PropertyWorkflowState)
       : undefined,
@@ -158,6 +159,7 @@ export class DrizzlePropertyStore implements PropertyStore {
       created_at_iso: now,
       updated_at_iso: now,
       parsed_contract: parsedContract,
+      pipeline_stage: "earnest_money",
     };
   }
 
@@ -220,6 +222,28 @@ export class DrizzlePropertyStore implements PropertyStore {
     const updated = await this.findById(id);
     if (!updated) {
       throw new Error(`Property ${id} not found after workflow update`);
+    }
+
+    return updated;
+  }
+
+  async updatePipelineStage(
+    id: string,
+    pipelineStage: string,
+  ): Promise<StoredPropertyRecord> {
+    const now = new Date().toISOString();
+
+    await db
+      .update(properties)
+      .set({
+        pipelineStage,
+        updatedAt: now,
+      })
+      .where(eq(properties.id, id));
+
+    const updated = await this.findById(id);
+    if (!updated) {
+      throw new Error(`Property ${id} not found after pipeline stage update`);
     }
 
     return updated;

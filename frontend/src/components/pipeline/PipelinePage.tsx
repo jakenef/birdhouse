@@ -47,7 +47,11 @@ export function PipelinePage({ propertyId }: PipelinePageProps) {
   const [earnestError, setEarnestError] = useState<string | null>(null);
   const [earnestModalOpen, setEarnestModalOpen] = useState(false);
   const [earnestSubmitting, setEarnestSubmitting] = useState(false);
-  const [earnestSubmitError, setEarnestSubmitError] = useState<string | null>(null);
+  const [earnestSubmitError, setEarnestSubmitError] = useState<string | null>(
+    null,
+  );
+  const [demoModeActive, setDemoModeActive] = useState(false);
+  const [demoControlsOpen, setDemoControlsOpen] = useState(false);
 
   const loadPipeline = useCallback(async () => {
     setLoading(true);
@@ -99,8 +103,7 @@ export function PipelinePage({ propertyId }: PipelinePageProps) {
   useEffect(() => {
     const onContactsUpdated = (event: Event) => {
       const detail =
-        event instanceof CustomEvent &&
-        typeof event.detail?.type === "string"
+        event instanceof CustomEvent && typeof event.detail?.type === "string"
           ? event.detail.type
           : null;
 
@@ -112,7 +115,8 @@ export function PipelinePage({ propertyId }: PipelinePageProps) {
     };
 
     window.addEventListener(CONTACTS_UPDATED_EVENT, onContactsUpdated);
-    return () => window.removeEventListener(CONTACTS_UPDATED_EVENT, onContactsUpdated);
+    return () =>
+      window.removeEventListener(CONTACTS_UPDATED_EVENT, onContactsUpdated);
   }, [loadEarnest]);
 
   const isEarnestActionable =
@@ -147,6 +151,39 @@ export function PipelinePage({ propertyId }: PipelinePageProps) {
   const decoratedPipeline = useMemo<PropertyPipelineData | null>(() => {
     if (!data) {
       return null;
+    }
+
+    // Demo mode: all stages completed except closing which is current
+    if (demoModeActive) {
+      const demoTasks = data.tasks.map((task) => ({
+        ...task,
+        status:
+          task.stage === "Closing" ? ("pending" as const) : ("done" as const),
+        completedDate:
+          task.stage === "Closing" ? null : new Date().toISOString(),
+      }));
+
+      const demoStages: PipelineStage[] = data.stages.map((stage) => ({
+        ...stage,
+        status:
+          stage.name === "Closing"
+            ? ("current" as const)
+            : ("completed" as const),
+        totalTasks: demoTasks.filter((t) => t.stage === stage.name).length,
+        completedTasks:
+          stage.name === "Closing"
+            ? 0
+            : demoTasks.filter((t) => t.stage === stage.name).length,
+        lastCompletedDate:
+          stage.name === "Closing" ? null : new Date().toISOString(),
+      }));
+
+      return {
+        ...data,
+        tasks: demoTasks,
+        stages: demoStages,
+        currentStage: "Closing",
+      };
     }
 
     if (!earnest) {
@@ -275,7 +312,9 @@ export function PipelinePage({ propertyId }: PipelinePageProps) {
       }
 
       if (stage.status === "completed") {
-        return stage.lastCompletedDate ? `All tasks complete` : "All tasks complete";
+        return stage.lastCompletedDate
+          ? `All tasks complete`
+          : "All tasks complete";
       }
 
       if (stage.status === "blocked") {
@@ -293,7 +332,11 @@ export function PipelinePage({ propertyId }: PipelinePageProps) {
 
   if (loading) {
     return (
-      <div className="state-card state-card--loading" role="status" aria-live="polite">
+      <div
+        className="state-card state-card--loading"
+        role="status"
+        aria-live="polite"
+      >
         Loading pipeline timeline...
       </div>
     );
@@ -304,7 +347,11 @@ export function PipelinePage({ propertyId }: PipelinePageProps) {
       <div className="state-card" role="alert">
         <h2>Unable to load pipeline</h2>
         <p>{errorMessage}</p>
-        <button type="button" className="state-card__action" onClick={() => void loadPipeline()}>
+        <button
+          type="button"
+          className="state-card__action"
+          onClick={() => void loadPipeline()}
+        >
           Retry
         </button>
       </div>
@@ -321,13 +368,48 @@ export function PipelinePage({ propertyId }: PipelinePageProps) {
   }
 
   return (
-    <section className="bh-pipeline-page" aria-label="Property pipeline timeline">
+    <section
+      className="bh-pipeline-page"
+      aria-label="Property pipeline timeline"
+    >
       {earnestError ? (
         <p className="bh-pipeline-task-toast bh-pipeline-task-toast--warning">
-          Earnest status is temporarily unavailable. The rest of the timeline is still
-          loaded.
+          Earnest status is temporarily unavailable. The rest of the timeline is
+          still loaded.
         </p>
       ) : null}
+
+      <div className="demo-controls">
+        <button
+          type="button"
+          className="demo-controls__toggle"
+          onClick={() => setDemoControlsOpen(!demoControlsOpen)}
+          aria-expanded={demoControlsOpen}
+        >
+          {demoControlsOpen ? "▼" : "▶"} Demo Controls
+        </button>
+        {demoControlsOpen && (
+          <div className="demo-controls__content">
+            <button
+              type="button"
+              className="demo-controls__button"
+              onClick={() => setDemoModeActive(true)}
+              disabled={demoModeActive}
+            >
+              Skip to Closing
+            </button>
+            {demoModeActive && (
+              <button
+                type="button"
+                className="demo-controls__button demo-controls__button--secondary"
+                onClick={() => setDemoModeActive(false)}
+              >
+                Reset
+              </button>
+            )}
+          </div>
+        )}
+      </div>
 
       <PipelineTimeline
         stages={decoratedPipeline?.stages || data.stages}
@@ -375,7 +457,9 @@ export function PipelinePage({ propertyId }: PipelinePageProps) {
             await loadEarnest();
           } catch (error) {
             setEarnestSubmitError(
-              error instanceof Error ? error.message : "Unable to send the draft.",
+              error instanceof Error
+                ? error.message
+                : "Unable to send the draft.",
             );
           } finally {
             setEarnestSubmitting(false);
@@ -392,7 +476,9 @@ export function PipelinePage({ propertyId }: PipelinePageProps) {
             await loadEarnest();
           } catch (error) {
             setEarnestSubmitError(
-              error instanceof Error ? error.message : "Unable to complete Earnest.",
+              error instanceof Error
+                ? error.message
+                : "Unable to complete Earnest.",
             );
           } finally {
             setEarnestSubmitting(false);
