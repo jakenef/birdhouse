@@ -554,9 +554,9 @@ export class EarnestWorkflowService {
           last_transition_reason: "Escrow sent wiring instructions.",
         };
         setSuggestion(next, {
-          pending_user_action: "confirm_wire_sent",
+          pending_user_action: "confirm_earnest_complete",
           prompt_to_user:
-            "Escrow sent wiring instructions. Send the earnest money, then confirm once you have initiated the transfer.",
+            "Escrow sent wiring instructions. Follow the instructions, then mark Earnest complete.",
         });
       }
 
@@ -572,47 +572,10 @@ export class EarnestWorkflowService {
         setSuggestion(next, {
           pending_user_action: "confirm_earnest_complete",
           prompt_to_user:
-            "Escrow appears to have received the earnest money deposit. Confirm to mark Earnest complete.",
+            "Escrow confirmed the earnest money is handled. Mark Earnest complete when you're ready.",
         });
       }
     }
-
-    const updated = await this.propertyStore.updateWorkflowState(property.id, next);
-    return toEarnestView(
-      updated.id,
-      updated.property_email,
-      next,
-      this.contactStore.getByType("escrow_officer"),
-    );
-  }
-
-  async confirmWireSent(propertyId: string): Promise<EarnestStepView> {
-    const property = await this.loadPropertyOrThrow(propertyId);
-    const workflowState = await this.resolveWorkflowState(propertyId);
-
-    if (
-      workflowState.steps.earnest_money.status !== "action_needed" ||
-      workflowState.earnest.suggestion.pending_user_action !== "confirm_wire_sent"
-    ) {
-      throw new EarnestWorkflowError(
-        "Earnest wire can only be confirmed when the step is waiting for buyer action.",
-      );
-    }
-
-    const next = cloneWorkflowState(workflowState);
-    next.current_label = "earnest_money";
-    next.steps.earnest_money = {
-      label: "earnest_money",
-      status: "waiting_for_parties",
-      locked_reason: null,
-      last_transition_at_iso: nowIso(),
-      last_transition_reason: "Buyer confirmed earnest wire was sent.",
-    };
-    setSuggestion(next, {
-      pending_user_action: "none",
-      prompt_to_user: null,
-      updated_at_iso: nowIso(),
-    });
 
     const updated = await this.propertyStore.updateWorkflowState(property.id, next);
     return toEarnestView(
@@ -633,7 +596,7 @@ export class EarnestWorkflowService {
         "confirm_earnest_complete"
     ) {
       throw new EarnestWorkflowError(
-        "Earnest can only be completed when escrow receipt confirmation is pending user approval.",
+        "Earnest can only be completed when user confirmation is pending.",
       );
     }
 

@@ -7,7 +7,6 @@ export type EarnestInboundSignal =
 
 export type InboxSuggestedUserAction =
   | "none"
-  | "confirm_wire_sent"
   | "confirm_earnest_complete";
 
 export type InboxMessageAnalysis = {

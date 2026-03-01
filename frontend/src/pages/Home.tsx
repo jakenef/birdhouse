@@ -38,6 +38,7 @@ export function Home({ onOpenDeal }: HomeProps) {
         title="Birdhouse"
         subtitle={`${deals.length} active · sorted by recent`}
         leftIcon={<BirdhouseIcon />}
+        leftIconStyle="standalone"
       />
 
       {errorMessage && <p className="inline-alert">{errorMessage}</p>}
@@ -64,30 +65,30 @@ export function Home({ onOpenDeal }: HomeProps) {
 
 function BirdhouseIcon() {
   return (
-    <svg viewBox="0 0 24 24" aria-hidden="true">
+    <svg viewBox="0 0 24 24" aria-hidden="true" fill="none">
       <path
-        d="M12 3.2 5.5 8v10.2a1 1 0 0 0 1 1h11a1 1 0 0 0 1-1V8L12 3.2Z"
-        fill="none"
+        d="M3.9 9.4 12 3.5l8.1 5.9"
         stroke="currentColor"
-        strokeWidth="1.8"
+        strokeWidth="1.9"
+        strokeLinecap="round"
         strokeLinejoin="round"
       />
-      <circle cx="12" cy="12.2" r="1.7" fill="none" stroke="currentColor" strokeWidth="1.8" />
       <path
-        d="M12 19v1.8m-2.6 0h5.2M3.9 10.1h2.2m12 0h2.1"
-        fill="none"
+        d="M6.4 9.2v8.2c0 .8.6 1.4 1.4 1.4h8.4c.8 0 1.4-.6 1.4-1.4V9.2"
         stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinecap="round"
+        strokeWidth="1.9"
+        strokeLinejoin="round"
       />
+      <circle cx="12" cy="12.2" r="2.2" stroke="currentColor" strokeWidth="1.8" />
+      <circle cx="11.45" cy="11.8" r="0.34" fill="currentColor" />
       <path
-        d="m8.2 16.2 1.7-1.2 1.3.9"
-        fill="none"
+        d="M13 12.15 13.9 11.85 13 11.45"
         stroke="currentColor"
         strokeWidth="1.5"
         strokeLinecap="round"
         strokeLinejoin="round"
       />
+      <path d="M9.2 19.9h5.6" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" />
     </svg>
   );
 }

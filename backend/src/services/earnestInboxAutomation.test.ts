@@ -27,7 +27,7 @@ describe("EarnestInboxAutomation", () => {
       confidence: 0.9,
       reason: "The email explicitly provides wiring instructions.",
       earnest_signal: "wire_instructions_provided",
-      suggested_user_action: "confirm_wire_sent",
+      suggested_user_action: "confirm_earnest_complete",
       warnings: [],
       analyzed_at_iso: "2026-02-28T12:00:00.000Z",
     });
@@ -73,7 +73,7 @@ describe("EarnestInboxAutomation", () => {
       "im_1",
       "thr_1",
       expect.objectContaining({
-        suggested_user_action: "confirm_wire_sent",
+        suggested_user_action: "confirm_earnest_complete",
       }),
     );
   });
@@ -138,7 +138,7 @@ describe("EarnestInboxAutomation", () => {
         confidence: 0.9,
         reason: "existing",
         earnest_signal: "wire_instructions_provided",
-        suggested_user_action: "confirm_wire_sent",
+        suggested_user_action: "confirm_earnest_complete",
         warnings: [],
         analyzed_at_iso: "2026-02-28T12:00:00.000Z",
       },

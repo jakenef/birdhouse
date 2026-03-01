@@ -385,13 +385,6 @@ class StubEarnestWorkflowService {
     };
   }
 
-  async confirmWireSent(propertyId: string) {
-    return this.sendEarnestDraft(propertyId, {
-      subject: "ignored",
-      body: "ignored",
-    });
-  }
-
   async confirmComplete(propertyId: string) {
     return {
       ...(await this.sendEarnestDraft(propertyId, {
@@ -619,7 +612,7 @@ describe("properties routes", () => {
     expect(response.body.earnest.send_state.message_id).toBe("im_123");
   });
 
-  it("confirms wire sent through the earnest route", async () => {
+  it("returns a deprecation error for the old confirm-wire-sent route", async () => {
     await request(app)
       .post("/api/properties")
       .send(buildParsedContract("doc-1"));
@@ -628,8 +621,10 @@ describe("properties routes", () => {
       "/api/properties/prop_1/pipeline/earnest/confirm-wire-sent",
     );
 
-    expect(response.status).toBe(200);
-    expect(response.body.earnest.step_status).toBe("waiting_for_parties");
+    expect(response.status).toBe(400);
+    expect(response.body.error.message).toContain(
+      "no longer used",
+    );
   });
 
   it("confirms earnest complete through the earnest route", async () => {

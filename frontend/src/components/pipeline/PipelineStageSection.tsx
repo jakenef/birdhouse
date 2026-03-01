@@ -1,13 +1,12 @@
-import { PipelineTaskRow } from "./PipelineTaskRow";
-import type { PipelineStage, PipelineTask } from "../../types/pipeline";
+import type { PipelineStage } from "../../types/pipeline";
 
 interface PipelineStageSectionProps {
   stage: PipelineStage;
-  tasks: PipelineTask[];
-  collapsed: boolean;
-  onToggle: () => void;
-  onTaskSelect: (task: PipelineTask) => void;
-  onConfirmTask: (task: PipelineTask) => Promise<void>;
+  clickable?: boolean;
+  summaryText?: string | null;
+  actionLabel?: string | null;
+  actionDisabled?: boolean;
+  onActionClick?: () => void;
 }
 
 function formatShortDate(value: string | null): string {
@@ -26,19 +25,39 @@ function formatShortDate(value: string | null): string {
   }).format(parsed);
 }
 
+function defaultSummaryText(stage: PipelineStage): string {
+  if (stage.status === "completed") {
+    return `All tasks complete${
+      stage.lastCompletedDate
+        ? ` · last completed ${formatShortDate(stage.lastCompletedDate)}`
+        : ""
+    }`;
+  }
+
+  if (stage.status === "blocked") {
+    return "Blocked";
+  }
+
+  if (stage.status === "current") {
+    return "Current stage";
+  }
+
+  return "Upcoming";
+}
+
 export function PipelineStageSection({
   stage,
-  tasks,
-  collapsed,
-  onToggle,
-  onTaskSelect,
-  onConfirmTask,
+  clickable = false,
+  summaryText = null,
+  actionLabel,
+  actionDisabled = false,
+  onActionClick,
 }: PipelineStageSectionProps) {
-  return (
-    <section
-      className={`bh-pipeline-stage-section bh-pipeline-stage-section--${stage.status}${collapsed ? " is-collapsed" : ""}`}
-      aria-label={`${stage.name} stage`}
-    >
+  const className = `bh-pipeline-stage-section bh-pipeline-stage-section--${stage.status}${clickable ? " is-clickable" : ""}`;
+  const resolvedSummary = summaryText || defaultSummaryText(stage);
+
+  const content = (
+    <>
       <span
         className={`bh-pipeline-stage-section__marker bh-pipeline-stage-section__marker--${stage.status}`}
         aria-hidden="true"
@@ -46,64 +65,47 @@ export function PipelineStageSection({
         <MarkerIcon status={stage.status} />
       </span>
 
+      <div className="bh-pipeline-stage-section__header-row">
+        <div className="bh-pipeline-stage-section__header">
+          <span className="bh-pipeline-stage-section__header-left">
+            <span className="bh-pipeline-stage-section__title">{stage.name}</span>
+            <span className="bh-pipeline-stage-section__meta">
+              {stage.completedTasks}/{stage.totalTasks} complete
+            </span>
+          </span>
+        </div>
+
+        {actionLabel ? (
+          <span
+            className={`bh-pipeline-stage-section__action${actionDisabled ? " is-disabled" : ""}`}
+          >
+            {actionLabel}
+          </span>
+        ) : null}
+      </div>
+
+      <p className="bh-pipeline-stage-section__summary">{resolvedSummary}</p>
+    </>
+  );
+
+  if (clickable && onActionClick) {
+    return (
       <button
         type="button"
-        className="bh-pipeline-stage-section__header"
-        onClick={onToggle}
-        aria-expanded={!collapsed}
+        className={className}
+        onClick={onActionClick}
+        disabled={actionDisabled}
+        aria-label={`${stage.name}. ${resolvedSummary}.${actionLabel ? ` ${actionLabel}.` : ""}`}
       >
-        <span className="bh-pipeline-stage-section__header-left">
-          <span className="bh-pipeline-stage-section__title">{stage.name}</span>
-          <span className="bh-pipeline-stage-section__meta">
-            {stage.completedTasks}/{stage.totalTasks} complete
-          </span>
-        </span>
-        <span className="bh-pipeline-stage-section__toggle" aria-hidden="true">
-          <ToggleChevron collapsed={collapsed} />
-        </span>
+        {content}
       </button>
+    );
+  }
 
-      {collapsed ? (
-        <p className="bh-pipeline-stage-section__summary">
-          {stage.status === "completed"
-            ? `All tasks complete${
-                stage.lastCompletedDate
-                  ? ` · last completed ${formatShortDate(stage.lastCompletedDate)}`
-                  : ""
-              }`
-            : "Tap to view tasks"}
-        </p>
-      ) : (
-        <ul className="bh-pipeline-stage-section__tasks">
-          {tasks.map((task) => (
-            <PipelineTaskRow
-              key={task.id}
-              task={task}
-              onSelect={onTaskSelect}
-              onConfirm={onConfirmTask}
-            />
-          ))}
-        </ul>
-      )}
-    </section>
-  );
-}
-
-function ToggleChevron({ collapsed }: { collapsed: boolean }) {
   return (
-    <svg
-      viewBox="0 0 24 24"
-      style={{ transform: collapsed ? "rotate(0deg)" : "rotate(180deg)" }}
-    >
-      <path
-        d="m6.7 9.5 5.3 5.4 5.3-5.4"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.9"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
+    <section className={className} aria-label={`${stage.name} stage`}>
+      {content}
+    </section>
   );
 }
 

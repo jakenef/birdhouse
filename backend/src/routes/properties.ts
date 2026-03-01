@@ -828,31 +828,18 @@ export function createPropertiesRouter(
     },
   );
 
-  // User confirms they manually sent the earnest wire after escrow provided
-  // instructions. This moves Earnest back to `waiting_for_parties`.
+  // Deprecated. The simplified Earnest flow now skips the intermediate
+  // "wire sent" step and goes straight from wiring instructions to
+  // `confirm-complete`.
   router.post(
     "/properties/:propertyId/pipeline/earnest/confirm-wire-sent",
     async (req: Request, res: Response) => {
-      try {
-        const earnest = await earnestWorkflowService.confirmWireSent(
-          req.params.propertyId,
-        );
-        res.json({ earnest });
-      } catch (error) {
-        if (error instanceof EarnestWorkflowError) {
-          sendEarnestWorkflowError(res, error);
-          return;
-        }
-
-        res.status(500).json({
-          error: {
-            message:
-              error instanceof Error
-                ? error.message
-                : "Unexpected server error",
-          },
-        });
-      }
+      res.status(400).json({
+        error: {
+          message:
+            "Earnest wire confirmation is no longer used. Mark Earnest complete instead.",
+        },
+      });
     },
   );
 
