@@ -301,14 +301,6 @@ export function PropertyDocuments({
       </button>
 
       <div className="demo-controls">
-        <button
-          type="button"
-          className="demo-controls__toggle"
-          onClick={() => setDemoControlsOpen(!demoControlsOpen)}
-          aria-expanded={demoControlsOpen}
-        >
-          {demoControlsOpen ? "▼" : "▶"} Demo Controls
-        </button>
         {demoControlsOpen && (
           <div className="demo-controls__content">
             <button
@@ -330,6 +322,15 @@ export function PropertyDocuments({
             )}
           </div>
         )}
+        <button
+          type="button"
+          className="demo-controls__toggle"
+          onClick={() => setDemoControlsOpen(!demoControlsOpen)}
+          aria-expanded={demoControlsOpen}
+          aria-label="Demo controls"
+        >
+          {demoControlsOpen ? "◀" : "▶"}
+        </button>
       </div>
 
       {loading ? (
