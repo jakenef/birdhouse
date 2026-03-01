@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { EmailComposer, type ComposerMode } from "../components/EmailComposer";
 import { EmailMessage } from "../components/EmailMessage";
+import { PropertyHomeButton } from "../components/PropertyHomeButton";
 import { getPropertyDocuments } from "../services/documents";
 import { deleteEmail, getEmailThread, sendEmail } from "../services/inbox";
 import type { EmailAttachment, SendEmailInput, ThreadDetail } from "../types/email";
@@ -10,6 +11,7 @@ import type { Document } from "../types/document";
 interface PropertyEmailDetailProps {
   propertyId: string;
   threadId: string;
+  onBackToHome: () => void;
   onBackToInbox: () => void;
 }
 
@@ -61,6 +63,7 @@ function buildForwardBody(thread: ThreadDetail): string {
 export function PropertyEmailDetail({
   propertyId,
   threadId,
+  onBackToHome,
   onBackToInbox,
 }: PropertyEmailDetailProps) {
   const [detail, setDetail] = useState<ThreadDetail | null>(null);
@@ -228,6 +231,8 @@ export function PropertyEmailDetail({
 
   return (
     <section className="property-page bh-email-detail-page" aria-label="Property email detail">
+      <PropertyHomeButton onClick={onBackToHome} />
+
       <header className="bh-email-detail-header">
         <button type="button" className="back-link" onClick={onBackToInbox}>
           <ChevronLeftIcon />

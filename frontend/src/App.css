@@ -9,7 +9,9 @@
 
 .app-main {
   flex: 1;
-  padding-bottom: calc(var(--nav-height) + env(safe-area-inset-bottom, 0px) + 1.25rem);
+  padding-bottom: calc(
+    var(--nav-height) + env(safe-area-inset-bottom, 0px) + 1.25rem
+  );
 }
 
 .home-page {
@@ -570,7 +572,11 @@
 
 .property-header__media--fallback {
   background:
-    radial-gradient(circle at 12% 18%, rgba(255, 255, 255, 0.26), transparent 42%),
+    radial-gradient(
+      circle at 12% 18%,
+      rgba(255, 255, 255, 0.26),
+      transparent 42%
+    ),
     linear-gradient(145deg, #1f4f97 0%, #14386f 45%, #0f274d 100%);
 }
 
@@ -682,8 +688,7 @@
 .document-card__preview {
   position: relative;
   height: 9rem;
-  background:
-    linear-gradient(130deg, #ecf3ff 0%, #f7f9fc 50%, #eaf0f9 100%);
+  background: linear-gradient(130deg, #ecf3ff 0%, #f7f9fc 50%, #eaf0f9 100%);
   border-bottom: 1px solid #e7edf7;
 }
 
@@ -1086,6 +1091,47 @@
   height: 1.05rem;
 }
 
+.bh-property-home-button {
+  position: sticky;
+  top: 0.42rem;
+  z-index: 26;
+  align-self: flex-start;
+  border: 1px solid #9cbce3;
+  border-radius: 999px;
+  background: #f7fbff;
+  color: #123f79;
+  box-shadow: 0 8px 18px rgba(18, 61, 118, 0.2);
+  min-height: 2.3rem;
+  padding: 0.44rem 0.84rem 0.44rem 0.7rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.42rem;
+  font-size: 12px;
+  line-height: 1.2;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  cursor: pointer;
+}
+
+.bh-property-home-button svg {
+  width: 1.08rem;
+  height: 1.08rem;
+}
+
+.bh-property-home-button:hover {
+  border-color: #84addc;
+  background: #ffffff;
+}
+
+.bh-property-home-button:active {
+  transform: translateY(1px) scale(0.99);
+}
+
+.bh-property-home-button:focus-visible {
+  outline: 2px solid #1d4ed8;
+  outline-offset: 2px;
+}
+
 .state-card code {
   font-size: 11px;
   line-height: 1.2;
@@ -1130,7 +1176,6 @@
   }
 }
 
-
 :root {
   --bh-surface: #ffffff;
   --bh-surface-border: #d8e1ed;
@@ -1145,7 +1190,9 @@
 
 .bh-inbox-page {
   gap: 0.74rem;
-  padding-bottom: calc(var(--nav-height) + env(safe-area-inset-bottom, 0px) + 1rem);
+  padding-bottom: calc(
+    var(--nav-height) + env(safe-area-inset-bottom, 0px) + 1rem
+  );
 }
 
 .bh-inbox-topbar {
@@ -1358,7 +1405,10 @@
 
 .bh-inbox-compose-fab {
   position: fixed;
-  right: min(calc((100vw - min(32rem, calc(100% - 0.9rem))) / 2 + 0.72rem), 1.4rem);
+  right: min(
+    calc((100vw - min(32rem, calc(100% - 0.9rem))) / 2 + 0.72rem),
+    1.4rem
+  );
   bottom: calc(var(--nav-height) + env(safe-area-inset-bottom, 0px) + 0.94rem);
   z-index: 45;
   border: 0;
@@ -1390,11 +1440,14 @@
 
 .bh-inbox-drawer-scrim {
   position: fixed;
-  inset: 0 0 calc(var(--nav-height) + env(safe-area-inset-bottom, 0px) + 0.35rem) 0;
+  inset: 0 0
+    calc(var(--nav-height) + env(safe-area-inset-bottom, 0px) + 0.35rem) 0;
   background: rgba(15, 23, 42, 0.18);
   opacity: 0;
   visibility: hidden;
-  transition: opacity 160ms ease, visibility 160ms ease;
+  transition:
+    opacity 160ms ease,
+    visibility 160ms ease;
   z-index: 56;
 }
 
@@ -1552,7 +1605,9 @@
 
 .bh-email-detail-page {
   gap: 0.72rem;
-  padding-bottom: calc(var(--nav-height) + env(safe-area-inset-bottom, 0px) + 1rem);
+  padding-bottom: calc(
+    var(--nav-height) + env(safe-area-inset-bottom, 0px) + 1rem
+  );
 }
 
 .bh-email-detail-header {
@@ -1853,7 +1908,9 @@
 .bh-pipeline-page {
   display: grid;
   gap: 0.72rem;
-  padding-bottom: calc(var(--nav-height) + env(safe-area-inset-bottom, 0px) + 0.8rem);
+  padding-bottom: calc(
+    var(--nav-height) + env(safe-area-inset-bottom, 0px) + 0.8rem
+  );
 }
 
 .bh-pipeline-task-toast {
@@ -2188,9 +2245,7 @@
   overflow-y: auto;
   border-radius: 1.1rem;
   border: 1px solid #d8dfeb;
-  background:
-    linear-gradient(180deg, #fffefb 0%, #ffffff 18%),
-    #ffffff;
+  background: linear-gradient(180deg, #fffefb 0%, #ffffff 18%), #ffffff;
   box-shadow:
     0 24px 48px rgba(15, 23, 42, 0.24),
     0 6px 16px rgba(15, 23, 42, 0.08);
@@ -2330,8 +2385,7 @@
   margin-top: 0.8rem;
   border: 1px solid #d8e2f0;
   border-radius: 0.88rem;
-  background:
-    linear-gradient(135deg, #f8fbff 0%, #fdfefe 100%);
+  background: linear-gradient(135deg, #f8fbff 0%, #fdfefe 100%);
   padding: 0.7rem 0.78rem;
 }
 
@@ -2505,7 +2559,8 @@
 .settings-page {
   display: grid;
   gap: 0.78rem;
-  padding: 0.82rem 0.9rem calc(var(--nav-height) + env(safe-area-inset-bottom, 0px) + 1rem);
+  padding: 0.82rem 0.9rem
+    calc(var(--nav-height) + env(safe-area-inset-bottom, 0px) + 1rem);
 }
 
 .settings-page__header h1 {
@@ -2808,4 +2863,91 @@
 .bh-contact-modal__actions button:disabled {
   opacity: 0.6;
   cursor: not-allowed;
+}
+/* ========================================================================= */
+/* Demo Controls */
+/* ========================================================================= */
+
+.demo-controls {
+  position: fixed;
+  top: 0.5rem;
+  right: 0.5rem;
+  z-index: 999;
+  display: flex;
+  flex-direction: row-reverse;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+
+.demo-controls__toggle {
+  width: 1.5rem;
+  height: 1.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 4px;
+  background: rgba(148, 163, 184, 0.15);
+  color: #94a3b8;
+  font-size: 10px;
+  padding: 0;
+  cursor: pointer;
+  opacity: 0.3;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+.demo-controls__toggle:hover {
+  opacity: 0.8;
+  background: rgba(148, 163, 184, 0.25);
+}
+
+.demo-controls__content {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  padding: 0.5rem;
+  border-radius: 6px;
+  background: rgba(248, 250, 252, 0.95);
+  backdrop-filter: blur(8px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  min-width: 140px;
+}
+
+.demo-controls__button {
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+  background: #ffffff;
+  color: #475569;
+  padding: 0.4rem 0.6rem;
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.demo-controls__button:hover:not(:disabled) {
+  background: #f1f5f9;
+  border-color: #94a3b8;
+  color: #1e293b;
+}
+
+.demo-controls__button:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+.demo-controls__button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.demo-controls__button--secondary {
+  background: #f8fafc;
+  color: #64748b;
+}
+
+.demo-controls__button--secondary:hover:not(:disabled) {
+  background: #f1f5f9;
+  color: #475569;
 }

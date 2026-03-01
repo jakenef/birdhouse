@@ -54,7 +54,9 @@ function isPipelineStepStatus(value: unknown): boolean {
   );
 }
 
-function isPropertyWorkflowState(value: unknown): value is PropertyWorkflowState {
+function isPropertyWorkflowState(
+  value: unknown,
+): value is PropertyWorkflowState {
   if (!value || typeof value !== "object") {
     return false;
   }
@@ -72,20 +74,26 @@ function isPropertyWorkflowState(value: unknown): value is PropertyWorkflowState
     workflow.version === 1 &&
     typeof workflow.current_label === "string" &&
     !!steps &&
-    ["under_contract", "earnest_money", "due_diligence_inspection", "financing", "title_escrow", "closing"].every(
-      (key) => {
-        const step = steps[key] as Record<string, unknown> | undefined;
-        return (
-          !!step &&
-          typeof step.label === "string" &&
-          isPipelineStepStatus(step.status) &&
-          (step.locked_reason === null || typeof step.locked_reason === "string") &&
-          typeof step.last_transition_at_iso === "string" &&
-          (step.last_transition_reason === null ||
-            typeof step.last_transition_reason === "string")
-        );
-      },
-    ) &&
+    [
+      "under_contract",
+      "earnest_money",
+      "due_diligence_inspection",
+      "financing",
+      "title_escrow",
+      "closing",
+    ].every((key) => {
+      const step = steps[key] as Record<string, unknown> | undefined;
+      return (
+        !!step &&
+        typeof step.label === "string" &&
+        isPipelineStepStatus(step.status) &&
+        (step.locked_reason === null ||
+          typeof step.locked_reason === "string") &&
+        typeof step.last_transition_at_iso === "string" &&
+        (step.last_transition_reason === null ||
+          typeof step.last_transition_reason === "string")
+      );
+    }) &&
     !!earnest &&
     !!draft &&
     typeof draft.status === "string" &&
@@ -215,6 +223,7 @@ export class FilePropertyStore implements PropertyStore {
       created_at_iso: timestamp,
       updated_at_iso: timestamp,
       parsed_contract: parsedContract,
+      pipeline_stage: "earnest_money",
     };
 
     database.properties.push(record);
@@ -247,7 +256,9 @@ export class FilePropertyStore implements PropertyStore {
     );
   }
 
-  async getWorkflowState(propertyId: string): Promise<PropertyWorkflowState | null> {
+  async getWorkflowState(
+    propertyId: string,
+  ): Promise<PropertyWorkflowState | null> {
     const property = await this.findById(propertyId);
     return property?.workflow_state || null;
   }
@@ -266,6 +277,29 @@ export class FilePropertyStore implements PropertyStore {
     const updatedRecord: StoredPropertyRecord = {
       ...database.properties[index],
       workflow_state: workflowState,
+      updated_at_iso: new Date().toISOString(),
+    };
+
+    database.properties[index] = updatedRecord;
+    await this.writeDatabase(database);
+
+    return updatedRecord;
+  }
+
+  async updatePipelineStage(
+    id: string,
+    pipelineStage: string,
+  ): Promise<StoredPropertyRecord> {
+    const database = await this.readDatabase();
+    const index = database.properties.findIndex((record) => record.id === id);
+
+    if (index === -1) {
+      throw new PropertyStoreError(`Property ${id} was not found.`);
+    }
+
+    const updatedRecord: StoredPropertyRecord = {
+      ...database.properties[index],
+      pipeline_stage: pipelineStage,
       updated_at_iso: new Date().toISOString(),
     };
 

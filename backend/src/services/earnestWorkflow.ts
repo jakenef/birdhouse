@@ -133,13 +133,21 @@ export function createInitialWorkflowState(): PropertyWorkflowState {
         "locked",
         "This step is not available yet.",
       ),
-      financing: createStep("financing", "locked", "This step is not available yet."),
+      financing: createStep(
+        "financing",
+        "locked",
+        "This step is not available yet.",
+      ),
       title_escrow: createStep(
         "title_escrow",
         "locked",
         "This step is not available yet.",
       ),
-      closing: createStep("closing", "locked", "This step is not available yet."),
+      closing: createStep(
+        "closing",
+        "locked",
+        "This step is not available yet.",
+      ),
     },
     earnest: {
       draft: {
@@ -167,7 +175,9 @@ export function createInitialWorkflowState(): PropertyWorkflowState {
   };
 }
 
-function cloneWorkflowState(workflowState: PropertyWorkflowState): PropertyWorkflowState {
+function cloneWorkflowState(
+  workflowState: PropertyWorkflowState,
+): PropertyWorkflowState {
   return JSON.parse(JSON.stringify(workflowState)) as PropertyWorkflowState;
 }
 
@@ -245,15 +255,14 @@ function toEarnestView(
     locked_reason: step.locked_reason,
     pending_user_action: suggestion.pending_user_action,
     prompt_to_user: suggestion.prompt_to_user,
-    contact:
-      contact
-        ? {
-            type: "escrow_officer",
-            name: contact.name,
-            email: contact.email,
-            company: contact.company,
-          }
-        : draft.recipient_email && draft.recipient_name
+    contact: contact
+      ? {
+          type: "escrow_officer",
+          name: contact.name,
+          email: contact.email,
+          company: contact.company,
+        }
+      : draft.recipient_email && draft.recipient_name
         ? {
             type: "escrow_officer",
             name: draft.recipient_name,
@@ -292,7 +301,9 @@ function toEarnestView(
 }
 
 function buildDraftContext(
-  property: Awaited<ReturnType<PropertyStore["findById"]>> extends infer T ? T : never,
+  property: Awaited<ReturnType<PropertyStore["findById"]>> extends infer T
+    ? T
+    : never,
   attachment: StoredDocument,
   contact: ReturnType<ContactStore["getByType"]>,
 ): EarnestDraftContext {
@@ -334,7 +345,9 @@ export class EarnestWorkflowService {
     return property;
   }
 
-  private async resolveWorkflowState(propertyId: string): Promise<PropertyWorkflowState> {
+  private async resolveWorkflowState(
+    propertyId: string,
+  ): Promise<PropertyWorkflowState> {
     const existing = await this.propertyStore.getWorkflowState(propertyId);
     if (existing) {
       return existing;
@@ -345,9 +358,14 @@ export class EarnestWorkflowService {
     return initial;
   }
 
-  private async resolveAttachment(propertyId: string, docHash: string): Promise<StoredDocument | null> {
+  private async resolveAttachment(
+    propertyId: string,
+    docHash: string,
+  ): Promise<StoredDocument | null> {
     const documents = await this.documentStore.listByPropertyId(propertyId);
-    const matching = documents.find((document) => document.doc_hash === docHash);
+    const matching = documents.find(
+      (document) => document.doc_hash === docHash,
+    );
     if (matching) {
       return matching;
     }
@@ -396,7 +414,10 @@ export class EarnestWorkflowService {
         "Add your escrow officer contact to prepare the earnest email.",
         null,
       );
-      const updated = await this.propertyStore.updateWorkflowState(property.id, locked);
+      const updated = await this.propertyStore.updateWorkflowState(
+        property.id,
+        locked,
+      );
       return toEarnestView(updated.id, updated.property_email, locked, null);
     }
 
@@ -412,7 +433,10 @@ export class EarnestWorkflowService {
         "The purchase contract attachment could not be found for this property.",
         null,
       );
-      const updated = await this.propertyStore.updateWorkflowState(property.id, locked);
+      const updated = await this.propertyStore.updateWorkflowState(
+        property.id,
+        locked,
+      );
       return toEarnestView(updated.id, updated.property_email, locked, contact);
     }
 
@@ -449,18 +473,26 @@ export class EarnestWorkflowService {
         last_error: null,
       };
 
-      const updated = await this.propertyStore.updateWorkflowState(property.id, next);
+      const updated = await this.propertyStore.updateWorkflowState(
+        property.id,
+        next,
+      );
       return toEarnestView(updated.id, updated.property_email, next, contact);
     } catch (error) {
       const message =
-        error instanceof Error ? error.message : "Earnest draft generation failed.";
+        error instanceof Error
+          ? error.message
+          : "Earnest draft generation failed.";
       const locked = withEarnestLocked(
         workflowState,
         "Earnest draft generation failed.",
         "Earnest draft could not be prepared yet.",
         message,
       );
-      const updated = await this.propertyStore.updateWorkflowState(property.id, locked);
+      const updated = await this.propertyStore.updateWorkflowState(
+        property.id,
+        locked,
+      );
       return toEarnestView(updated.id, updated.property_email, locked, contact);
     }
   }
@@ -493,7 +525,8 @@ export class EarnestWorkflowService {
     const workflowState = await this.resolveWorkflowState(propertyId);
     if (
       workflowState.steps.earnest_money.status !== "action_needed" ||
-      workflowState.earnest.suggestion.pending_user_action !== "send_earnest_email"
+      workflowState.earnest.suggestion.pending_user_action !==
+        "send_earnest_email"
     ) {
       throw new EarnestWorkflowError(
         "Earnest draft can only be sent when the step is action_needed.",
@@ -507,12 +540,18 @@ export class EarnestWorkflowService {
 
     const draft = workflowState.earnest.draft;
     if (!draft.attachment_document_id || !draft.attachment_filename) {
-      throw new EarnestWorkflowError("Purchase contract attachment is missing.");
+      throw new EarnestWorkflowError(
+        "Purchase contract attachment is missing.",
+      );
     }
 
-    const attachment = await this.documentStore.findById(draft.attachment_document_id);
+    const attachment = await this.documentStore.findById(
+      draft.attachment_document_id,
+    );
     if (!attachment) {
-      throw new EarnestWorkflowError("Purchase contract attachment is missing.");
+      throw new EarnestWorkflowError(
+        "Purchase contract attachment is missing.",
+      );
     }
 
     const sent = await this.outboundEmailService.send({
@@ -533,7 +572,10 @@ export class EarnestWorkflowService {
     });
 
     const next = this.applySendResult(workflowState, contact, sent, input);
-    const updated = await this.propertyStore.updateWorkflowState(property.id, next);
+    const updated = await this.propertyStore.updateWorkflowState(
+      property.id,
+      next,
+    );
 
     return toEarnestView(updated.id, updated.property_email, next, contact);
   }
@@ -586,7 +628,8 @@ export class EarnestWorkflowService {
           status: "action_needed",
           locked_reason: null,
           last_transition_at_iso: analysis.analyzed_at_iso,
-          last_transition_reason: "Escrow appears to have received the earnest money.",
+          last_transition_reason:
+            "Escrow appears to have received the earnest money.",
         };
         setSuggestion(next, {
           pending_user_action: "confirm_earnest_complete",
@@ -596,7 +639,10 @@ export class EarnestWorkflowService {
       }
     }
 
-    const updated = await this.propertyStore.updateWorkflowState(property.id, next);
+    const updated = await this.propertyStore.updateWorkflowState(
+      property.id,
+      next,
+    );
     return toEarnestView(
       updated.id,
       updated.property_email,
@@ -634,7 +680,14 @@ export class EarnestWorkflowService {
       updated_at_iso: nowIso(),
     });
 
-    const updated = await this.propertyStore.updateWorkflowState(property.id, next);
+    const updated = await this.propertyStore.updateWorkflowState(
+      property.id,
+      next,
+    );
+
+    // Update pipeline stage to "closing" (for demo)
+    await this.propertyStore.updatePipelineStage(property.id, "closing");
+
     return toEarnestView(
       updated.id,
       updated.property_email,

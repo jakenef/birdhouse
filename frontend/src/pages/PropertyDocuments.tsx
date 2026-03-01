@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 
+import { PropertyHomeButton } from "../components/PropertyHomeButton";
 import { getPropertyDocuments } from "../services/documents";
 import type { Document } from "../types/document";
 
@@ -140,6 +141,8 @@ export function PropertyDocuments({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [activeDocumentId, setActiveDocumentId] = useState<string | null>(null);
   const [viewerDocumentId, setViewerDocumentId] = useState<string | null>(null);
+  const [demoDocuments, setDemoDocuments] = useState<Document[]>([]);
+  const [demoControlsOpen, setDemoControlsOpen] = useState(false);
 
   useEffect(() => {
     const loadDocuments = async () => {
@@ -164,9 +167,83 @@ export function PropertyDocuments({
   }, [propertyId]);
 
   const cards = useMemo(
-    () => documents.map((document) => toCardModel(document)),
-    [documents],
+    () =>
+      [...demoDocuments, ...documents].map((document) => toCardModel(document)),
+    [documents, demoDocuments],
   );
+
+  const fillDemoDocuments = () => {
+    const mockDocs: Document[] = [
+      {
+        id: "demo-doc-1",
+        filename: "Purchase_Contract.pdf",
+        mime_type: "application/pdf",
+        size_bytes: 245800,
+        source: "email_intake",
+        created_at: new Date(
+          Date.now() - 7 * 24 * 60 * 60 * 1000,
+        ).toISOString(),
+        download_url: null,
+        ai_summary: {
+          title: "Purchase Contract and Timeline Terms",
+          summary:
+            "This contract defines buyer and seller obligations, purchase price of $485,000, and critical deadlines. Settlement date is March 14, 2026 with inspection objection deadline of February 25.",
+          highlights: [
+            "Purchase price: $485,000 with $10,000 earnest money",
+            "Settlement deadline: March 14, 2026",
+            "Inspection objection deadline: February 25, 2026",
+            "Loan contingency expires March 1, 2026",
+          ],
+        },
+      },
+      {
+        id: "demo-doc-2",
+        filename: "Home_Inspection_Report.pdf",
+        mime_type: "application/pdf",
+        size_bytes: 1842600,
+        source: "email_intake",
+        created_at: new Date(
+          Date.now() - 3 * 24 * 60 * 60 * 1000,
+        ).toISOString(),
+        download_url: null,
+        ai_summary: {
+          title: "Inspection Findings and Risk Snapshot",
+          summary:
+            "Overall property is in good condition with minor maintenance items. HVAC system is 8 years old and functioning properly. Roof has 5-7 years remaining life.",
+          highlights: [
+            "No major structural issues found",
+            "HVAC system functional, 8 years old",
+            "Roof needs monitoring, 5-7 years remaining",
+            "Minor electrical updates recommended",
+            "Water heater is 4 years old, well maintained",
+          ],
+        },
+      },
+      {
+        id: "demo-doc-3",
+        filename: "Preliminary_Title_Report.pdf",
+        mime_type: "application/pdf",
+        size_bytes: 892400,
+        source: "email_intake",
+        created_at: new Date(
+          Date.now() - 2 * 24 * 60 * 60 * 1000,
+        ).toISOString(),
+        download_url: null,
+        ai_summary: {
+          title: "Title and Ownership Review Package",
+          summary:
+            "Title search came back clean with standard exceptions. No liens or encumbrances affecting transfer. Property ownership is clear with no disputes.",
+          highlights: [
+            "No outstanding liens or judgments",
+            "Ownership vests with current seller only",
+            "Standard title exceptions apply",
+            "Easements are typical for subdivision",
+          ],
+        },
+      },
+    ];
+    setDemoDocuments(mockDocs);
+  };
 
   const activeCard = useMemo(
     () => cards.find((card) => card.document.id === activeDocumentId) ?? null,
@@ -219,10 +296,40 @@ export function PropertyDocuments({
 
   return (
     <section className="property-page" aria-label="Property documents page">
-      <button type="button" className="back-link" onClick={onBackToHome}>
-        <ChevronLeftIcon />
-        Back to home
-      </button>
+      <PropertyHomeButton onClick={onBackToHome} />
+
+      <div className="demo-controls">
+        {demoControlsOpen && (
+          <div className="demo-controls__content">
+            <button
+              type="button"
+              className="demo-controls__button"
+              onClick={fillDemoDocuments}
+              disabled={demoDocuments.length > 0}
+            >
+              Fill Documents
+            </button>
+            {demoDocuments.length > 0 && (
+              <button
+                type="button"
+                className="demo-controls__button demo-controls__button--secondary"
+                onClick={() => setDemoDocuments([])}
+              >
+                Clear Demo
+              </button>
+            )}
+          </div>
+        )}
+        <button
+          type="button"
+          className="demo-controls__toggle"
+          onClick={() => setDemoControlsOpen(!demoControlsOpen)}
+          aria-expanded={demoControlsOpen}
+          aria-label="Demo controls"
+        >
+          {demoControlsOpen ? "◀" : "▶"}
+        </button>
+      </div>
 
       {loading ? (
         <div
@@ -385,17 +492,6 @@ export function PropertyDocuments({
         </div>
       )}
     </section>
-  );
-}
-
-function ChevronLeftIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true">
-      <path
-        d="M14.72 5.22a1 1 0 0 1 .06 1.41L9.42 12l5.36 5.37a1 1 0 0 1-1.41 1.41l-6.07-6.07a1 1 0 0 1 0-1.42l6.07-6.07a1 1 0 0 1 1.35 0Z"
-        fill="currentColor"
-      />
-    </svg>
   );
 }
 
