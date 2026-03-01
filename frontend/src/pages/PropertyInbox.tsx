@@ -4,6 +4,7 @@ import { EmailComposer, type ComposerMode } from "../components/EmailComposer";
 import { InboxDrawer } from "../components/InboxDrawer";
 import { InboxThreadRow } from "../components/InboxThreadRow";
 import { InboxTopBar } from "../components/InboxTopBar";
+import { PropertyHomeButton } from "../components/PropertyHomeButton";
 import { consumeInboxToast, listPropertyEmails, sendEmail } from "../services/inbox";
 import type {
   ListPropertyEmailsResult,
@@ -14,6 +15,7 @@ import type {
 
 interface PropertyInboxProps {
   propertyId: string;
+  onBackToHome: () => void;
   onOpenThread: (threadId: string) => void;
 }
 
@@ -32,7 +34,11 @@ function searchMatches(thread: ThreadListItem, search: string): boolean {
   );
 }
 
-export function PropertyInbox({ propertyId, onOpenThread }: PropertyInboxProps) {
+export function PropertyInbox({
+  propertyId,
+  onBackToHome,
+  onOpenThread,
+}: PropertyInboxProps) {
   const [inbox, setInbox] = useState<ListPropertyEmailsResult | null>(null);
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -95,6 +101,8 @@ export function PropertyInbox({ propertyId, onOpenThread }: PropertyInboxProps) 
 
   return (
     <section className="property-page bh-inbox-page" aria-label="Property inbox list">
+      <PropertyHomeButton onClick={onBackToHome} />
+
       <InboxTopBar
         searchValue={search}
         onSearchChange={setSearch}

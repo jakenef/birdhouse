@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 
+import { PropertyHomeButton } from "../components/PropertyHomeButton";
 import { getPropertyDocuments } from "../services/documents";
 import type { Document } from "../types/document";
 
@@ -219,10 +220,7 @@ export function PropertyDocuments({
 
   return (
     <section className="property-page" aria-label="Property documents page">
-      <button type="button" className="back-link" onClick={onBackToHome}>
-        <ChevronLeftIcon />
-        Back to home
-      </button>
+      <PropertyHomeButton onClick={onBackToHome} />
 
       {loading ? (
         <div
@@ -385,17 +383,6 @@ export function PropertyDocuments({
         </div>
       )}
     </section>
-  );
-}
-
-function ChevronLeftIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true">
-      <path
-        d="M14.72 5.22a1 1 0 0 1 .06 1.41L9.42 12l5.36 5.37a1 1 0 0 1-1.41 1.41l-6.07-6.07a1 1 0 0 1 0-1.42l6.07-6.07a1 1 0 0 1 1.35 0Z"
-        fill="currentColor"
-      />
-    </svg>
   );
 }
 

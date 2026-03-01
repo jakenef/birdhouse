@@ -193,6 +193,7 @@ function App() {
           <PropertyEmailDetail
             propertyId={route.propertyId}
             threadId={route.threadId}
+            onBackToHome={() => navigate("/")}
             onBackToInbox={() =>
               navigate(`/property/${encodeURIComponent(route.propertyId)}/inbox`)
             }
@@ -203,6 +204,7 @@ function App() {
       return (
         <PropertyInbox
           propertyId={route.propertyId}
+          onBackToHome={() => navigate("/")}
           onOpenThread={(threadId) =>
             navigate(
               `/property/${encodeURIComponent(route.propertyId)}/inbox/${encodeURIComponent(threadId)}`,
