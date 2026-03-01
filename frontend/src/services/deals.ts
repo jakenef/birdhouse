@@ -301,6 +301,11 @@ export async function fetchDeals(): Promise<Deal[]> {
     }
 
     return payload.properties
+      .filter((property) => {
+        // Blacklist properties with email starting with "property@" (failed parsing)
+        const email = property.property_email ?? property.propertyEmail;
+        return !email || !email.toLowerCase().startsWith("property@");
+      })
       .map((property, index) => mapApiPropertyToDeal(property, index))
       .sort(
         (a, b) =>
