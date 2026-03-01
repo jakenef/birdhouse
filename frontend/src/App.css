@@ -62,6 +62,20 @@
   height: 1rem;
 }
 
+.top-bar__icon--standalone {
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  color: #1f4f97;
+}
+
+.top-bar__icon--standalone svg {
+  width: 2rem;
+  height: 2rem;
+}
+
 .top-bar__text {
   min-width: 0;
 }
