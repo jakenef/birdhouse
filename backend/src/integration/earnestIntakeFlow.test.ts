@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createContactsRouter } from "../routes/contacts";
 import { createPropertiesRouter } from "../routes/properties";
 import { ContactStore } from "../services/contactStore";
+import { ClosingWorkflowService } from "../services/closingWorkflow";
 import { DocumentStore, StoredDocument } from "../services/documentStore";
 import { EarnestWorkflowService } from "../services/earnestWorkflow";
 import { generateEarnestDraft } from "../services/earnestDraftGenerator";
@@ -158,6 +159,7 @@ describe("earnest intake flow integration", () => {
   let contactStore: ContactStore;
   let propertyEmailSender: SpyPropertyEmailSender;
   let earnestWorkflowService: EarnestWorkflowService;
+  let closingWorkflowService: ClosingWorkflowService;
   let propertyId: string;
   let propertyEmail: string;
   let documentId: string;
@@ -176,6 +178,7 @@ describe("earnest intake flow integration", () => {
       contactStore,
       propertyEmailSender,
     );
+    closingWorkflowService = new ClosingWorkflowService(propertyStore);
     propertyId = fixture.property.id;
     propertyEmail = fixture.property.property_email || "";
     documentId = fixture.document.id;
@@ -190,7 +193,9 @@ describe("earnest intake flow integration", () => {
         new StubStreetViewService(),
         documentStore as unknown as DocumentStore,
         earnestWorkflowService,
+        closingWorkflowService,
         propertyEmailSender,
+        {} as any,
       ),
     );
   });
@@ -318,6 +323,7 @@ describe("earnest intake flow integration", () => {
       contactStore,
       propertyEmailSender,
     );
+    closingWorkflowService = new ClosingWorkflowService(propertyStore);
 
     app = express();
     app.use(express.json());
@@ -329,7 +335,9 @@ describe("earnest intake flow integration", () => {
         new StubStreetViewService(),
         documentStore as unknown as DocumentStore,
         earnestWorkflowService,
+        closingWorkflowService,
         propertyEmailSender,
+        {} as any,
       ),
     );
 

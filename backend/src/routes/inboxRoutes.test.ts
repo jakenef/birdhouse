@@ -9,6 +9,7 @@ import { ParsedPurchaseContract } from "../schemas/parsedPurchaseContract.schema
 import { PropertyStore } from "../services/propertyStore";
 import { StreetViewCacheEntry, StoredPropertyRecord } from "../types/property";
 import { StreetViewService } from "../services/googleStreetView";
+import { ClosingWorkflowService } from "../services/closingWorkflow";
 import { EarnestWorkflowService } from "../services/earnestWorkflow";
 import { OutboundEmailService } from "../services/outboundEmailService";
 
@@ -196,6 +197,16 @@ class StubStreetViewService implements StreetViewService {
   }
 }
 
+class StubClosingWorkflowService {
+  async getClosingStep() {
+    throw new Error("not used in inbox route tests");
+  }
+
+  async confirmComplete() {
+    throw new Error("not used in inbox route tests");
+  }
+}
+
 // We need a stub that satisfies the DocumentStore dependency. The inbox
 // endpoints never call documentStore, so a no-op stub is fine.
 // DocumentStore is a concrete class, but createPropertiesRouter just needs
@@ -260,6 +271,7 @@ describe("inbox route endpoints", () => {
         new StubStreetViewService(),
         new StubDocumentStore() as any,
         {} as EarnestWorkflowService,
+        new StubClosingWorkflowService() as unknown as ClosingWorkflowService,
         new OutboundEmailService(inboxStore),
         inboxStore,
       ),

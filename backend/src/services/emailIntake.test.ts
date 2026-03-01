@@ -120,6 +120,7 @@ describe("email intake property session cutoff", () => {
       {} as any,
       { existsByResendId: vi.fn() } as any,
       { processStoredMessage: vi.fn() } as any,
+      { processStoredMessage: vi.fn() } as any,
       "2026-02-28T12:00:00.000Z",
     );
 
@@ -157,6 +158,7 @@ describe("email intake property session cutoff", () => {
       {} as any,
       inboxStore as any,
       automation as any,
+      { processStoredMessage: vi.fn() } as any,
       "2026-02-28T12:00:00.000Z",
     );
 
@@ -232,6 +234,7 @@ describe("email intake property session cutoff", () => {
       {} as any,
       inboxStore as any,
       automation as any,
+      { processStoredMessage: vi.fn() } as any,
       "2026-02-28T12:00:00.000Z",
     );
 
@@ -273,6 +276,7 @@ describe("email intake property session cutoff", () => {
       {} as any,
       {} as any,
       inboxStore as any,
+      { processStoredMessage: vi.fn() } as any,
       { processStoredMessage: vi.fn() } as any,
       "2026-02-28T12:00:00.000Z",
     );
@@ -320,6 +324,7 @@ describe("email intake property session cutoff", () => {
       {} as any,
       {} as any,
       inboxStore as any,
+      { processStoredMessage: vi.fn() } as any,
       { processStoredMessage: vi.fn() } as any,
       "2026-02-28T12:00:00.000Z",
     );

@@ -8,6 +8,8 @@ import { parseRouter } from "./routes/parse";
 import { createPropertiesRouter } from "./routes/properties";
 import { createContactsRouter } from "./routes/contacts";
 import { ContactStore } from "./services/contactStore";
+import { ClosingInboxAutomation } from "./services/closingInboxAutomation";
+import { ClosingWorkflowService } from "./services/closingWorkflow";
 import { EarnestWorkflowService } from "./services/earnestWorkflow";
 import { EarnestInboxAutomation } from "./services/earnestInboxAutomation";
 import { GoogleStreetViewService } from "./services/googleStreetView";
@@ -31,9 +33,14 @@ const earnestWorkflowService = new EarnestWorkflowService(
   contactStore,
   outboundEmailService,
 );
+const closingWorkflowService = new ClosingWorkflowService(propertyStore);
 const earnestInboxAutomation = new EarnestInboxAutomation(
   inboxStore,
   earnestWorkflowService,
+);
+const closingInboxAutomation = new ClosingInboxAutomation(
+  documentStore,
+  closingWorkflowService,
 );
 
 app.use(cors());
@@ -55,6 +62,7 @@ app.use(
       streetViewService,
       documentStore,
       earnestWorkflowService,
+      closingWorkflowService,
       outboundEmailService,
       inboxStore,
     ),
@@ -89,6 +97,7 @@ app.listen(port, () => {
     earnestWorkflowService,
     inboxStore,
     earnestInboxAutomation,
+    closingInboxAutomation,
   );
 
   console.log(

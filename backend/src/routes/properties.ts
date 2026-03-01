@@ -13,6 +13,10 @@ import {
   StreetViewService,
 } from "../services/googleStreetView";
 import {
+  ClosingWorkflowError,
+  ClosingWorkflowService,
+} from "../services/closingWorkflow";
+import {
   EarnestWorkflowError,
   EarnestWorkflowService,
 } from "../services/earnestWorkflow";
@@ -118,6 +122,7 @@ export function createPropertiesRouter(
   streetViewService: StreetViewService,
   documentStore: DocumentStore,
   earnestWorkflowService: EarnestWorkflowService,
+  closingWorkflowService: ClosingWorkflowService,
   outboundEmailService: OutboundEmailService,
   inboxStore: InboxStore,
 ) {
@@ -126,6 +131,26 @@ export function createPropertiesRouter(
   function sendEarnestWorkflowError(
     res: Response,
     error: EarnestWorkflowError,
+  ) {
+    if (error.message === "Property not found.") {
+      res.status(404).json({
+        error: {
+          message: error.message,
+        },
+      });
+      return;
+    }
+
+    res.status(400).json({
+      error: {
+        message: error.message,
+      },
+    });
+  }
+
+  function sendClosingWorkflowError(
+    res: Response,
+    error: ClosingWorkflowError,
   ) {
     if (error.message === "Property not found.") {
       res.status(404).json({
@@ -855,6 +880,69 @@ export function createPropertiesRouter(
       } catch (error) {
         if (error instanceof EarnestWorkflowError) {
           sendEarnestWorkflowError(res, error);
+          return;
+        }
+
+        res.status(500).json({
+          error: {
+            message:
+              error instanceof Error
+                ? error.message
+                : "Unexpected server error",
+          },
+        });
+      }
+    },
+  );
+
+  // -------------------------------------------------------------------------
+  // GET /properties/:propertyId/pipeline/closing
+  //
+  // Frontend contract for the Closing step UI:
+  // - `step_status` is the primary state machine value
+  // - `pending_user_action` tells the UI whether Mark Complete should appear
+  // - `latest_email_analysis` explains why Closing was activated
+  // - `evidence_document` points at the triggering ALTA file
+  //
+  // This is a Closing-specific endpoint, not a generic full pipeline payload.
+  // -------------------------------------------------------------------------
+  router.get(
+    "/properties/:propertyId/pipeline/closing",
+    async (req: Request, res: Response) => {
+      try {
+        const closing = await closingWorkflowService.getClosingStep(
+          req.params.propertyId,
+        );
+        res.json({ closing });
+      } catch (error) {
+        if (error instanceof ClosingWorkflowError) {
+          sendClosingWorkflowError(res, error);
+          return;
+        }
+
+        res.status(500).json({
+          error: {
+            message:
+              error instanceof Error
+                ? error.message
+                : "Unexpected server error",
+          },
+        });
+      }
+    },
+  );
+
+  router.post(
+    "/properties/:propertyId/pipeline/closing/confirm-complete",
+    async (req: Request, res: Response) => {
+      try {
+        const closing = await closingWorkflowService.confirmComplete(
+          req.params.propertyId,
+        );
+        res.json({ closing });
+      } catch (error) {
+        if (error instanceof ClosingWorkflowError) {
+          sendClosingWorkflowError(res, error);
           return;
         }
 

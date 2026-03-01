@@ -64,6 +64,9 @@ function isPropertyWorkflowState(value: unknown): value is PropertyWorkflowState
   const earnest = workflow.earnest as Record<string, unknown> | undefined;
   const draft = earnest?.draft as Record<string, unknown> | undefined;
   const suggestion = earnest?.suggestion as Record<string, unknown> | undefined;
+  const closingStage = workflow.closing_stage as Record<string, unknown> | undefined;
+  const closingSuggestion =
+    closingStage?.suggestion as Record<string, unknown> | undefined;
 
   return (
     workflow.version === 1 &&
@@ -103,7 +106,29 @@ function isPropertyWorkflowState(value: unknown): value is PropertyWorkflowState
     typeof suggestion.latest_pipeline_label === "string" &&
     typeof suggestion.latest_earnest_signal === "string" &&
     (suggestion.updated_at_iso === null ||
-      typeof suggestion.updated_at_iso === "string")
+      typeof suggestion.updated_at_iso === "string") &&
+    !!closingStage &&
+    !!closingSuggestion &&
+    typeof closingSuggestion.pending_user_action === "string" &&
+    (closingSuggestion.prompt_to_user === null ||
+      typeof closingSuggestion.prompt_to_user === "string") &&
+    (closingSuggestion.evidence_message_id === null ||
+      typeof closingSuggestion.evidence_message_id === "string") &&
+    (closingSuggestion.evidence_thread_id === null ||
+      typeof closingSuggestion.evidence_thread_id === "string") &&
+    (closingSuggestion.evidence_document_id === null ||
+      typeof closingSuggestion.evidence_document_id === "string") &&
+    (closingSuggestion.evidence_filename === null ||
+      typeof closingSuggestion.evidence_filename === "string") &&
+    (closingSuggestion.latest_summary === null ||
+      typeof closingSuggestion.latest_summary === "string") &&
+    (closingSuggestion.latest_confidence === null ||
+      typeof closingSuggestion.latest_confidence === "number") &&
+    (closingSuggestion.latest_reason === null ||
+      typeof closingSuggestion.latest_reason === "string") &&
+    typeof closingSuggestion.latest_pipeline_label === "string" &&
+    (closingSuggestion.updated_at_iso === null ||
+      typeof closingSuggestion.updated_at_iso === "string")
   );
 }
 

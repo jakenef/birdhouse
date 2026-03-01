@@ -61,6 +61,22 @@ export type EarnestAgentSuggestion = {
   updated_at_iso: string | null;
 };
 
+export type ClosingPendingUserAction = "none" | "confirm_closing_complete";
+
+export type ClosingAgentSuggestion = {
+  pending_user_action: ClosingPendingUserAction;
+  prompt_to_user: string | null;
+  evidence_message_id: string | null;
+  evidence_thread_id: string | null;
+  evidence_document_id: string | null;
+  evidence_filename: string | null;
+  latest_summary: string | null;
+  latest_confidence: number | null;
+  latest_reason: string | null;
+  latest_pipeline_label: PipelineClassificationLabel;
+  updated_at_iso: string | null;
+};
+
 export type PropertyWorkflowState = {
   version: 1;
   current_label: PipelineLabel;
@@ -75,5 +91,8 @@ export type PropertyWorkflowState = {
   earnest: {
     draft: EarnestDraftState;
     suggestion: EarnestAgentSuggestion;
+  };
+  closing_stage: {
+    suggestion: ClosingAgentSuggestion;
   };
 };

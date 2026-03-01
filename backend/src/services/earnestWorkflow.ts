@@ -97,6 +97,22 @@ function createEmptySuggestion() {
   };
 }
 
+function createEmptyClosingSuggestion() {
+  return {
+    pending_user_action: "none" as const,
+    prompt_to_user: null,
+    evidence_message_id: null,
+    evidence_thread_id: null,
+    evidence_document_id: null,
+    evidence_filename: null,
+    latest_summary: null,
+    latest_confidence: null,
+    latest_reason: null,
+    latest_pipeline_label: "unknown" as const,
+    updated_at_iso: null,
+  };
+}
+
 export function createInitialWorkflowState(): PropertyWorkflowState {
   return {
     version: 1,
@@ -144,6 +160,9 @@ export function createInitialWorkflowState(): PropertyWorkflowState {
         last_error: null,
       },
       suggestion: createEmptySuggestion(),
+    },
+    closing_stage: {
+      suggestion: createEmptyClosingSuggestion(),
     },
   };
 }

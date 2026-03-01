@@ -5,6 +5,10 @@ import { describe, expect, it, beforeEach, vi } from "vitest";
 import { ParsedPurchaseContract } from "../schemas/parsedPurchaseContract.schema";
 import { DocumentStore } from "../services/documentStore";
 import {
+  ClosingWorkflowError,
+  ClosingWorkflowService,
+} from "../services/closingWorkflow";
+import {
   EarnestWorkflowError,
   EarnestWorkflowService,
 } from "../services/earnestWorkflow";
@@ -396,6 +400,50 @@ class StubEarnestWorkflowService {
   }
 }
 
+class StubClosingWorkflowService {
+  async getClosingStep(propertyId: string) {
+    if (propertyId === "prop_missing") {
+      throw new ClosingWorkflowError("Property not found.");
+    }
+
+    return {
+      property_id: propertyId,
+      property_email: "123-main@demo.test",
+      current_label: "closing" as const,
+      step_status: "locked" as const,
+      locked_reason: "Closing is not available yet.",
+      pending_user_action: "none" as const,
+      prompt_to_user: null,
+      latest_email_analysis: {
+        message_id: null,
+        thread_id: null,
+        pipeline_label: "unknown" as const,
+        summary: null,
+        confidence: null,
+        reason: null,
+      },
+      evidence_document: {
+        document_id: null,
+        filename: null,
+      },
+    };
+  }
+
+  async confirmComplete(propertyId: string) {
+    if (propertyId === "prop_locked") {
+      throw new ClosingWorkflowError(
+        "Closing can only be completed when user confirmation is pending.",
+      );
+    }
+
+    return {
+      ...(await this.getClosingStep(propertyId)),
+      step_status: "completed" as const,
+      pending_user_action: "none" as const,
+    };
+  }
+}
+
 class StubStreetViewService implements StreetViewService {
   async lookup(): Promise<StreetViewCacheEntry> {
     return {
@@ -437,6 +485,7 @@ describe("properties routes", () => {
         new StubStreetViewService(),
         new StubDocumentStore() as unknown as DocumentStore,
         new StubEarnestWorkflowService() as unknown as EarnestWorkflowService,
+        new StubClosingWorkflowService() as unknown as ClosingWorkflowService,
         new StubPropertyEmailSender() as unknown as OutboundEmailService,
         new StubInboxStore() as unknown as InboxStore,
       ),
@@ -638,6 +687,37 @@ describe("properties routes", () => {
 
     expect(response.status).toBe(200);
     expect(response.body.earnest.step_status).toBe("completed");
+  });
+
+  it("returns the closing pipeline state", async () => {
+    await request(app)
+      .post("/api/properties")
+      .send(buildParsedContract("doc-1"));
+
+    const response = await request(app).get(
+      "/api/properties/prop_1/pipeline/closing",
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.body.closing.step_status).toBe("locked");
+    expect(response.body.closing.pending_user_action).toBe("none");
+    expect(response.body.closing.latest_email_analysis.pipeline_label).toBe(
+      "unknown",
+    );
+  });
+
+  it("confirms closing complete through the closing route", async () => {
+    await request(app)
+      .post("/api/properties")
+      .send(buildParsedContract("doc-1"));
+
+    const response = await request(app).post(
+      "/api/properties/prop_1/pipeline/closing/confirm-complete",
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.body.closing.step_status).toBe("completed");
+    expect(response.body.closing.pending_user_action).toBe("none");
   });
 
   it("uses the shared mocked sender for inbox send", async () => {

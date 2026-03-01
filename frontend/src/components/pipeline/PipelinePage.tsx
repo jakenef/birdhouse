@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import {
+  confirmClosingComplete,
   confirmEarnestComplete,
+  getClosingStep,
   getEarnestStep,
   getPropertyPipeline,
   prepareEarnestStep,
@@ -9,11 +11,14 @@ import {
 } from "../../services/pipeline";
 import { CONTACTS_UPDATED_EVENT } from "../../services/contacts";
 import type {
+  ClosingStepData,
   EarnestPendingUserAction,
   EarnestStepData,
   PipelineStage,
+  PipelineTaskStatus,
   PropertyPipelineData,
 } from "../../types/pipeline";
+import { ClosingActionModal } from "./ClosingActionModal";
 import {
   computeCurrentStageId,
   computeStageCompletion,
@@ -48,6 +53,12 @@ export function PipelinePage({ propertyId }: PipelinePageProps) {
   const [earnestModalOpen, setEarnestModalOpen] = useState(false);
   const [earnestSubmitting, setEarnestSubmitting] = useState(false);
   const [earnestSubmitError, setEarnestSubmitError] = useState<string | null>(null);
+  const [closing, setClosing] = useState<ClosingStepData | null>(null);
+  const [closingLoading, setClosingLoading] = useState(true);
+  const [closingError, setClosingError] = useState<string | null>(null);
+  const [closingModalOpen, setClosingModalOpen] = useState(false);
+  const [closingSubmitting, setClosingSubmitting] = useState(false);
+  const [closingSubmitError, setClosingSubmitError] = useState<string | null>(null);
 
   const loadPipeline = useCallback(async () => {
     setLoading(true);
@@ -91,10 +102,30 @@ export function PipelinePage({ propertyId }: PipelinePageProps) {
     }
   }, [propertyId]);
 
+  const loadClosing = useCallback(async () => {
+    setClosingLoading(true);
+    setClosingError(null);
+
+    try {
+      const response = await getClosingStep(propertyId);
+      setClosing(response);
+    } catch (error) {
+      setClosingError(
+        error instanceof Error
+          ? error.message
+          : "Unable to load the Closing step.",
+      );
+      setClosing(null);
+    } finally {
+      setClosingLoading(false);
+    }
+  }, [propertyId]);
+
   useEffect(() => {
     void loadPipeline();
     void loadEarnest();
-  }, [loadEarnest, loadPipeline]);
+    void loadClosing();
+  }, [loadClosing, loadEarnest, loadPipeline]);
 
   useEffect(() => {
     const onContactsUpdated = (event: Event) => {
@@ -118,6 +149,9 @@ export function PipelinePage({ propertyId }: PipelinePageProps) {
   const isEarnestActionable =
     earnest?.stepStatus === "action_needed" &&
     earnest.pendingUserAction !== "none";
+  const isClosingActionable =
+    closing?.stepStatus === "action_needed" &&
+    closing.pendingUserAction !== "none";
 
   const openEarnestAction = useCallback(async () => {
     setEarnestSubmitError(null);
@@ -144,39 +178,70 @@ export function PipelinePage({ propertyId }: PipelinePageProps) {
     setEarnestModalOpen(true);
   }, [earnest, propertyId]);
 
+  const openClosingAction = useCallback(() => {
+    setClosingSubmitError(null);
+    setClosingModalOpen(true);
+  }, []);
+
   const decoratedPipeline = useMemo<PropertyPipelineData | null>(() => {
     if (!data) {
       return null;
     }
 
-    if (!earnest) {
+    if (!earnest && !closing) {
       return data;
     }
 
     const nextTasks = data.tasks.map((task) => {
-      if (task.stage !== "Earnest Money") {
-        return task;
+      if (closing?.stepStatus === "completed") {
+        return {
+          ...task,
+          status: "done" as PipelineTaskStatus,
+          completedDate: task.completedDate || task.dueDate || null,
+        };
       }
 
-      let status = task.status;
-      let completedDate = task.completedDate;
+      if (task.stage === "Earnest Money" && earnest) {
+        let status: PipelineTaskStatus = task.status;
+        let completedDate = task.completedDate;
 
-      if (earnest.stepStatus === "completed") {
-        status = "done";
-        completedDate = earnest.sendState.sentAtIso || task.completedDate;
-      } else if (earnest.stepStatus === "locked") {
-        status = "blocked";
-        completedDate = null;
-      } else {
-        status = "pending";
-        completedDate = null;
+        if (earnest.stepStatus === "completed") {
+          status = "done";
+          completedDate = earnest.sendState.sentAtIso || task.completedDate;
+        } else if (earnest.stepStatus === "locked") {
+          status = "blocked";
+          completedDate = null;
+        } else {
+          status = "pending";
+          completedDate = null;
+        }
+
+        return {
+          ...task,
+          status,
+          completedDate,
+        };
       }
 
-      return {
-        ...task,
-        status,
-        completedDate,
-      };
+      if (task.stage === "Closing" && closing) {
+        if (closing.stepStatus === "action_needed") {
+          return {
+            ...task,
+            status: "pending" as PipelineTaskStatus,
+            completedDate: null,
+          };
+        }
+
+        if (closing.stepStatus === "locked") {
+          return {
+            ...task,
+            status: "blocked" as PipelineTaskStatus,
+            completedDate: null,
+          };
+        }
+      }
+
+      return task;
     });
 
     const nextCurrentStage = computeCurrentStageId(
@@ -221,7 +286,7 @@ export function PipelinePage({ propertyId }: PipelinePageProps) {
       stages: nextStages,
       currentStage: nextCurrentStage,
     };
-  }, [data, earnest]);
+  }, [closing, data, earnest]);
 
   const earnestActionLabel = useMemo(() => {
     if (!isEarnestActionable || !earnest) {
@@ -240,13 +305,28 @@ export function PipelinePage({ propertyId }: PipelinePageProps) {
     return labels[earnest.pendingUserAction];
   }, [earnest, isEarnestActionable]);
 
+  const closingActionLabel = useMemo(() => {
+    if (!isClosingActionable || !closing) {
+      return null;
+    }
+
+    return closing.pendingUserAction === "confirm_closing_complete"
+      ? "Mark Complete"
+      : null;
+  }, [closing, isClosingActionable]);
+
   const handleStageSelect = useCallback(
     (stage: PipelineStage) => {
       if (stage.name === "Earnest Money" && isEarnestActionable) {
         void openEarnestAction();
+        return;
+      }
+
+      if (stage.name === "Closing" && isClosingActionable) {
+        openClosingAction();
       }
     },
-    [isEarnestActionable, openEarnestAction],
+    [isClosingActionable, isEarnestActionable, openClosingAction, openEarnestAction],
   );
 
   const stageSummaryText = useCallback(
@@ -274,6 +354,19 @@ export function PipelinePage({ propertyId }: PipelinePageProps) {
         }
       }
 
+      if (stage.name === "Closing" && closing) {
+        if (isClosingActionable) {
+          return (
+            closing.promptToUser ||
+            "An ALTA closing document was received. Mark complete when ready."
+          );
+        }
+
+        if (closing.stepStatus === "completed") {
+          return "Closing complete. Pipeline finished.";
+        }
+      }
+
       if (stage.status === "completed") {
         return stage.lastCompletedDate ? `All tasks complete` : "All tasks complete";
       }
@@ -288,7 +381,7 @@ export function PipelinePage({ propertyId }: PipelinePageProps) {
 
       return "Upcoming";
     },
-    [earnest, isEarnestActionable],
+    [closing, earnest, isClosingActionable, isEarnestActionable],
   );
 
   if (loading) {
@@ -322,10 +415,13 @@ export function PipelinePage({ propertyId }: PipelinePageProps) {
 
   return (
     <section className="bh-pipeline-page" aria-label="Property pipeline timeline">
-      {earnestError ? (
+      {earnestError || closingError ? (
         <p className="bh-pipeline-task-toast bh-pipeline-task-toast--warning">
-          Earnest status is temporarily unavailable. The rest of the timeline is still
-          loaded.
+          {earnestError && closingError
+            ? "Earnest and Closing status are temporarily unavailable. The rest of the timeline is still loaded."
+            : earnestError
+            ? "Earnest status is temporarily unavailable. The rest of the timeline is still loaded."
+            : "Closing status is temporarily unavailable. The rest of the timeline is still loaded."}
         </p>
       ) : null}
 
@@ -340,6 +436,20 @@ export function PipelinePage({ propertyId }: PipelinePageProps) {
               label: earnestActionLabel,
               onClick: () => handleStageSelect(stage),
               disabled: earnestLoading || earnestSubmitting,
+              summaryText: stageSummaryText(stage),
+              clickable: true,
+            };
+          }
+
+          if (
+            stage.name === "Closing" &&
+            closingActionLabel &&
+            isClosingActionable
+          ) {
+            return {
+              label: closingActionLabel,
+              onClick: () => handleStageSelect(stage),
+              disabled: closingLoading || closingSubmitting,
               summaryText: stageSummaryText(stage),
               clickable: true,
             };
@@ -396,6 +506,38 @@ export function PipelinePage({ propertyId }: PipelinePageProps) {
             );
           } finally {
             setEarnestSubmitting(false);
+          }
+        }}
+      />
+
+      <ClosingActionModal
+        open={closingModalOpen}
+        closing={closing}
+        loading={closingLoading}
+        submitting={closingSubmitting}
+        errorMessage={closingSubmitError}
+        onClose={() => {
+          if (!closingSubmitting) {
+            setClosingModalOpen(false);
+          }
+        }}
+        onConfirmComplete={async () => {
+          setClosingSubmitting(true);
+          setClosingSubmitError(null);
+          try {
+            const updated = await confirmClosingComplete(propertyId);
+            setClosing(updated);
+            setClosingModalOpen(false);
+            await loadPipeline();
+          } catch (error) {
+            setClosingSubmitError(
+              error instanceof Error
+                ? error.message
+                : "Unable to mark Closing complete.",
+            );
+          } finally {
+            setClosingSubmitting(false);
+            await loadClosing();
           }
         }}
       />

@@ -14,7 +14,8 @@ import { PropertyStore, DuplicatePropertyError } from "./propertyStore";
 import { DocumentStore } from "./documentStore";
 import { EarnestWorkflowService } from "./earnestWorkflow";
 import { EarnestInboxAutomation } from "./earnestInboxAutomation";
-import { InboxStore } from "./inboxStore";
+import { ClosingInboxAutomation } from "./closingInboxAutomation";
+import { InboxStore, StoredInboxMessage } from "./inboxStore";
 import { extractContractSummary, summarizePdf } from "./documentSummarizer";
 
 // ---------------------------------------------------------------------------
@@ -182,11 +183,11 @@ async function processPropertyEmail(
   docHash: string,
   store: PropertyStore,
   docStore: DocumentStore,
-): Promise<void> {
+): Promise<string | null> {
   const property = await store.findByPropertyEmail(propertyEmail);
   if (!property) {
     log(`skip - no property found for ${propertyEmail}`);
-    return;
+    return null;
   }
 
   // Generate AI summary for the PDF
@@ -204,7 +205,7 @@ async function processPropertyEmail(
   }
 
   // Create document record (allow multiple docs with same hash for same property)
-  await docStore.create({
+  const document = await docStore.create({
     propertyId: property.id,
     filename: att.filename || "attachment.pdf",
     filePath: `data/intake-pdfs/${savedFilename}`,
@@ -218,6 +219,8 @@ async function processPropertyEmail(
   log(
     `added doc to ${property.property_name} (${att.filename || "attachment.pdf"})`,
   );
+
+  return document.id;
 }
 
 async function storeInboundPropertyEmail(
@@ -226,16 +229,15 @@ async function storeInboundPropertyEmail(
   targetEmail: string,
   store: PropertyStore,
   inboxStore: InboxStore,
-  earnestInboxAutomation: EarnestInboxAutomation,
-): Promise<void> {
+): Promise<StoredInboxMessage | null> {
   const property = await store.findByPropertyEmail(targetEmail);
   if (!property) {
     log(`inbox skip - no property for ${targetEmail}`);
-    return;
+    return null;
   }
 
   if (await inboxStore.existsByResendId(email.id)) {
-    return;
+    return null;
   }
 
   const { data: fullEmail, error: fullError } =
@@ -245,7 +247,7 @@ async function storeInboundPropertyEmail(
     log(
       `error fetching full email: ${fullError?.message ?? "No data returned"}`,
     );
-    return;
+    return null;
   }
 
   const full = fullEmail as any;
@@ -290,14 +292,7 @@ async function storeInboundPropertyEmail(
   });
 
   log(`inbox stored: "${email.subject}" for ${property.property_name}`);
-
-  try {
-    await earnestInboxAutomation.processStoredMessage(storedMessage);
-  } catch (error) {
-    log(
-      `earnest inbox automation error: ${error instanceof Error ? error.message : String(error)}`,
-    );
-  }
+  return storedMessage;
 }
 
 async function processEmail(
@@ -310,6 +305,7 @@ async function processEmail(
   earnestWorkflowService: EarnestWorkflowService,
   inboxStore: InboxStore,
   earnestInboxAutomation: EarnestInboxAutomation,
+  closingInboxAutomation: ClosingInboxAutomation,
 ): Promise<void> {
   const pdfAttachments = (email.attachments ?? []).filter(
     (att: { content_type: string }) => att.content_type === "application/pdf",
@@ -319,6 +315,7 @@ async function processEmail(
     `email from ${email.from} -> ${targetEmail} - "${email.subject}" (${pdfAttachments.length} PDF${pdfAttachments.length !== 1 ? "s" : ""})`,
   );
 
+  const propertyDocumentIds: string[] = [];
   for (const att of pdfAttachments) {
     try {
       const { data: attData, error: attError } =
@@ -360,7 +357,7 @@ async function processEmail(
           earnestWorkflowService,
         );
       } else {
-        await processPropertyEmail(
+        const documentId = await processPropertyEmail(
           targetEmail,
           att,
           pdfBuffer,
@@ -369,6 +366,9 @@ async function processEmail(
           store,
           docStore,
         );
+        if (documentId) {
+          propertyDocumentIds.push(documentId);
+        }
       }
     } catch (error) {
       if (error instanceof DuplicatePropertyError) {
@@ -381,14 +381,39 @@ async function processEmail(
 
   if (!isIntakeEmail) {
     try {
-      await storeInboundPropertyEmail(
+      const storedMessage = await storeInboundPropertyEmail(
         resend,
         email,
         targetEmail,
         store,
         inboxStore,
-        earnestInboxAutomation,
       );
+
+      if (!storedMessage) {
+        return;
+      }
+
+      try {
+        await earnestInboxAutomation.processStoredMessage(storedMessage);
+      } catch (error) {
+        log(
+          `earnest inbox automation error: ${error instanceof Error ? error.message : String(error)}`,
+        );
+      }
+
+      try {
+        await closingInboxAutomation.processStoredMessage({
+          propertyId: storedMessage.property_id,
+          messageId: storedMessage.id,
+          threadId: storedMessage.thread_id,
+          receivedAtIso: storedMessage.sent_at,
+          documentIds: propertyDocumentIds,
+        });
+      } catch (error) {
+        log(
+          `closing inbox automation error: ${error instanceof Error ? error.message : String(error)}`,
+        );
+      }
     } catch (error) {
       log(
         `inbox store error: ${error instanceof Error ? error.message : String(error)}`,
@@ -404,6 +429,7 @@ async function pollOnce(
   earnestWorkflowService: EarnestWorkflowService,
   inboxStore: InboxStore,
   earnestInboxAutomation: EarnestInboxAutomation,
+  closingInboxAutomation: ClosingInboxAutomation,
   propertyEmailSessionStartedAtIso: string,
 ): Promise<void> {
   const { data: listData, error: listError } =
@@ -469,6 +495,7 @@ async function pollOnce(
         earnestWorkflowService,
         inboxStore,
         earnestInboxAutomation,
+        closingInboxAutomation,
       );
       await markEmailProcessed(email.id);
     }
@@ -484,6 +511,7 @@ async function pollOnce(
         earnestWorkflowService,
         inboxStore,
         earnestInboxAutomation,
+        closingInboxAutomation,
       );
       await markEmailProcessed(email.id);
     }
@@ -608,6 +636,7 @@ export function startEmailPolling(
   earnestWorkflowService: EarnestWorkflowService,
   inboxStore: InboxStore,
   earnestInboxAutomation: EarnestInboxAutomation,
+  closingInboxAutomation: ClosingInboxAutomation,
 ): void {
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey || apiKey.trim().length === 0) {
@@ -628,6 +657,7 @@ export function startEmailPolling(
     earnestWorkflowService,
     inboxStore,
     earnestInboxAutomation,
+    closingInboxAutomation,
     propertyEmailSessionStartedAtIso,
   ).catch((error) =>
     log(
@@ -643,6 +673,7 @@ export function startEmailPolling(
       earnestWorkflowService,
       inboxStore,
       earnestInboxAutomation,
+      closingInboxAutomation,
       propertyEmailSessionStartedAtIso,
     ).catch((error) =>
       log(

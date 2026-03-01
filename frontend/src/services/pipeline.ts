@@ -1,6 +1,9 @@
 import { getPropertyDocuments } from "./documents";
 import type { Document, PropertyDocumentsProperty } from "../types/document";
 import {
+  type ClosingPendingUserAction,
+  type ClosingStepData,
+  type ClosingStepStatus,
   PIPELINE_STAGE_ORDER,
   type EarnestPendingUserAction,
   type EarnestPipelineLabel,
@@ -25,6 +28,8 @@ const CONFIRMED_TASKS_STORAGE_PREFIX = "pipeline_confirmed_tasks";
 type ApiEarnestStepStatus = EarnestStepStatus;
 type ApiEarnestPendingUserAction = EarnestPendingUserAction;
 type ApiEarnestPipelineLabel = EarnestPipelineLabel;
+type ApiClosingStepStatus = ClosingStepStatus;
+type ApiClosingPendingUserAction = ClosingPendingUserAction;
 
 type ApiEarnestResponse = {
   earnest: {
@@ -72,6 +77,30 @@ type ApiEarnestResponse = {
         | "none"
         | "wire_instructions_provided"
         | "earnest_received_confirmation";
+    };
+  };
+};
+
+type ApiClosingResponse = {
+  closing: {
+    property_id: string;
+    property_email: string | null;
+    current_label: "closing";
+    step_status: ApiClosingStepStatus;
+    locked_reason: string | null;
+    pending_user_action: ApiClosingPendingUserAction;
+    prompt_to_user: string | null;
+    latest_email_analysis: {
+      message_id: string | null;
+      thread_id: string | null;
+      pipeline_label: ApiEarnestPipelineLabel;
+      summary: string | null;
+      confidence: number | null;
+      reason: string | null;
+    };
+    evidence_document: {
+      document_id: string | null;
+      filename: string | null;
     };
   };
 };
@@ -135,6 +164,21 @@ function isEarnestPipelineLabel(
     value === "closing" ||
     value === "unknown"
   );
+}
+
+function isClosingStepStatus(value: unknown): value is ApiClosingStepStatus {
+  return (
+    value === "locked" ||
+    value === "action_needed" ||
+    value === "waiting_for_parties" ||
+    value === "completed"
+  );
+}
+
+function isClosingPendingUserAction(
+  value: unknown,
+): value is ApiClosingPendingUserAction {
+  return value === "none" || value === "confirm_closing_complete";
 }
 
 function isApiEarnestResponse(value: unknown): value is ApiEarnestResponse {
@@ -244,6 +288,67 @@ function normalizeEarnestStep(response: ApiEarnestResponse): EarnestStepData {
   };
 }
 
+function isApiClosingResponse(value: unknown): value is ApiClosingResponse {
+  if (!isRecord(value) || !isRecord(value.closing)) {
+    return false;
+  }
+
+  const closing = value.closing;
+  const latestAnalysis = closing.latest_email_analysis;
+  const evidenceDocument = closing.evidence_document;
+
+  return (
+    typeof closing.property_id === "string" &&
+    (typeof closing.property_email === "string" || closing.property_email === null) &&
+    closing.current_label === "closing" &&
+    isClosingStepStatus(closing.step_status) &&
+    (typeof closing.locked_reason === "string" || closing.locked_reason === null) &&
+    isClosingPendingUserAction(closing.pending_user_action) &&
+    (typeof closing.prompt_to_user === "string" || closing.prompt_to_user === null) &&
+    isRecord(latestAnalysis) &&
+    (typeof latestAnalysis.message_id === "string" ||
+      latestAnalysis.message_id === null) &&
+    (typeof latestAnalysis.thread_id === "string" ||
+      latestAnalysis.thread_id === null) &&
+    isEarnestPipelineLabel(latestAnalysis.pipeline_label) &&
+    (typeof latestAnalysis.summary === "string" || latestAnalysis.summary === null) &&
+    (typeof latestAnalysis.confidence === "number" ||
+      latestAnalysis.confidence === null) &&
+    (typeof latestAnalysis.reason === "string" || latestAnalysis.reason === null) &&
+    isRecord(evidenceDocument) &&
+    (typeof evidenceDocument.document_id === "string" ||
+      evidenceDocument.document_id === null) &&
+    (typeof evidenceDocument.filename === "string" ||
+      evidenceDocument.filename === null)
+  );
+}
+
+function normalizeClosingStep(response: ApiClosingResponse): ClosingStepData {
+  const closing = response.closing;
+
+  return {
+    propertyId: closing.property_id,
+    propertyEmail: closing.property_email,
+    currentLabel: closing.current_label,
+    stepStatus: closing.step_status,
+    lockedReason: closing.locked_reason,
+    pendingUserAction: closing.pending_user_action,
+    promptToUser: closing.prompt_to_user,
+    latestEmailAnalysis: {
+      messageId: closing.latest_email_analysis.message_id,
+      threadId: closing.latest_email_analysis.thread_id,
+      pipelineLabel: closing.latest_email_analysis.pipeline_label,
+      summary: closing.latest_email_analysis.summary,
+      confidence: closing.latest_email_analysis.confidence,
+      reason: closing.latest_email_analysis.reason,
+    },
+    evidenceDocument: {
+      documentId: closing.evidence_document.document_id,
+      filename: closing.evidence_document.filename,
+    },
+  };
+}
+
 async function requestEarnestStep(
   propertyId: string,
   path: string,
@@ -264,6 +369,28 @@ async function requestEarnestStep(
   }
 
   return normalizeEarnestStep(payload);
+}
+
+async function requestClosingStep(
+  propertyId: string,
+  path: string,
+  init?: RequestInit,
+): Promise<ClosingStepData> {
+  const response = await fetch(
+    `/api/properties/${encodeURIComponent(propertyId)}/pipeline/closing${path}`,
+    init,
+  );
+
+  if (!response.ok) {
+    throw new Error(`Failed to load closing step (${response.status}).`);
+  }
+
+  const payload: unknown = await response.json();
+  if (!isApiClosingResponse(payload)) {
+    throw new Error("Invalid closing step response.");
+  }
+
+  return normalizeClosingStep(payload);
 }
 
 function addDays(isoDate: string | null, days: number): string | null {
@@ -645,7 +772,7 @@ export async function confirmPipelineTask(
   };
 }
 
-// Only the Earnest step is backend-driven today. The rest of the pipeline
+// Earnest and Closing are backend-driven today. The rest of the pipeline
 // timeline still comes from the local/mock timeline builder above.
 export async function getEarnestStep(propertyId: string): Promise<EarnestStepData> {
   return requestEarnestStep(propertyId, "");
@@ -694,6 +821,21 @@ export async function confirmEarnestComplete(
   propertyId: string,
 ): Promise<EarnestStepData> {
   return requestEarnestStep(propertyId, "/confirm-complete", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+  });
+}
+
+export async function getClosingStep(propertyId: string): Promise<ClosingStepData> {
+  return requestClosingStep(propertyId, "");
+}
+
+export async function confirmClosingComplete(
+  propertyId: string,
+): Promise<ClosingStepData> {
+  return requestClosingStep(propertyId, "/confirm-complete", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",

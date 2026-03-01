@@ -122,3 +122,35 @@ export interface EarnestStepData {
       | "earnest_received_confirmation";
   };
 }
+
+export type ClosingStepStatus =
+  | "locked"
+  | "action_needed"
+  | "waiting_for_parties"
+  | "completed";
+
+export type ClosingPendingUserAction =
+  | "none"
+  | "confirm_closing_complete";
+
+export interface ClosingStepData {
+  propertyId: string;
+  propertyEmail: string | null;
+  currentLabel: "closing";
+  stepStatus: ClosingStepStatus;
+  lockedReason: string | null;
+  pendingUserAction: ClosingPendingUserAction;
+  promptToUser: string | null;
+  latestEmailAnalysis: {
+    messageId: string | null;
+    threadId: string | null;
+    pipelineLabel: EarnestPipelineLabel;
+    summary: string | null;
+    confidence: number | null;
+    reason: string | null;
+  };
+  evidenceDocument: {
+    documentId: string | null;
+    filename: string | null;
+  };
+}
