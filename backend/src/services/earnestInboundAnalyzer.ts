@@ -100,7 +100,8 @@ export async function analyzeEarnestInboundEmail(
     confidence: signal.confidence,
     reason: signal.reason.trim(),
     earnest_signal: signal.earnest_signal,
-    suggested_user_action: signal.suggested_user_action,
+    suggested_user_action:
+      signal.earnest_signal === "none" ? "none" : "confirm_earnest_complete",
     warnings,
     analyzed_at_iso: analyzedAtIso,
   };

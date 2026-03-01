@@ -58,3 +58,67 @@ export interface PropertyPipelineData {
     canConfirmTaskRemotely: boolean;
   };
 }
+
+export type EarnestStepStatus =
+  | "locked"
+  | "action_needed"
+  | "waiting_for_parties"
+  | "completed";
+
+export type EarnestPendingUserAction =
+  | "none"
+  | "send_earnest_email"
+  | "confirm_earnest_complete";
+
+export type EarnestPipelineLabel =
+  | "under_contract"
+  | "earnest_money"
+  | "due_diligence_inspection"
+  | "financing"
+  | "title_escrow"
+  | "closing"
+  | "unknown";
+
+export interface EarnestStepData {
+  propertyId: string;
+  propertyEmail: string | null;
+  currentLabel: "earnest_money";
+  stepStatus: EarnestStepStatus;
+  lockedReason: string | null;
+  pendingUserAction: EarnestPendingUserAction;
+  promptToUser: string | null;
+  contact: {
+    type: "escrow_officer";
+    name: string;
+    email: string;
+    company?: string;
+  } | null;
+  attachment: {
+    documentId: string;
+    filename: string;
+  } | null;
+  draft: {
+    subject: string | null;
+    body: string | null;
+    generatedAtIso: string | null;
+    openAiModel: string | null;
+    generationReason: string | null;
+  };
+  sendState: {
+    threadId: string | null;
+    messageId: string | null;
+    sentAtIso: string | null;
+  };
+  latestEmailAnalysis: {
+    messageId: string | null;
+    threadId: string | null;
+    pipelineLabel: EarnestPipelineLabel;
+    summary: string | null;
+    confidence: number | null;
+    reason: string | null;
+    earnestSignal:
+      | "none"
+      | "wire_instructions_provided"
+      | "earnest_received_confirmation";
+  };
+}

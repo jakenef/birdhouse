@@ -407,7 +407,7 @@ describe("earnest intake flow integration", () => {
       confidence: 0.94,
       reason: "The email explicitly provides wiring instructions and says receipt will be confirmed later.",
       earnest_signal: "wire_instructions_provided",
-      suggested_user_action: "confirm_wire_sent",
+      suggested_user_action: "confirm_earnest_complete",
       warnings: [],
       analyzed_at_iso: "2026-02-28T00:25:00.000Z",
     });
@@ -416,29 +416,7 @@ describe("earnest intake flow integration", () => {
       `/api/properties/${propertyId}/pipeline/earnest`,
     );
     expect(wirePrompt.body.earnest.step_status).toBe("action_needed");
-    expect(wirePrompt.body.earnest.pending_user_action).toBe("confirm_wire_sent");
-
-    const waitingAgain = await request(app).post(
-      `/api/properties/${propertyId}/pipeline/earnest/confirm-wire-sent`,
-    );
-    expect(waitingAgain.body.earnest.step_status).toBe("waiting_for_parties");
-
-    await earnestWorkflowService.applyInboxAnalysis(propertyId, "im_receipt", "thr_earnest", {
-      version: 1,
-      pipeline_label: "earnest_money",
-      summary: "Escrow confirmed the earnest money deposit was received.",
-      confidence: 0.97,
-      reason: "The email says the earnest money deposit was received and the buyer is all set.",
-      earnest_signal: "earnest_received_confirmation",
-      suggested_user_action: "confirm_earnest_complete",
-      warnings: [],
-      analyzed_at_iso: "2026-02-28T00:30:00.000Z",
-    });
-
-    const completionPrompt = await request(app).get(
-      `/api/properties/${propertyId}/pipeline/earnest`,
-    );
-    expect(completionPrompt.body.earnest.pending_user_action).toBe(
+    expect(wirePrompt.body.earnest.pending_user_action).toBe(
       "confirm_earnest_complete",
     );
 

@@ -5,7 +5,6 @@ export type EarnestInboundSignalExtraction = {
     | "earnest_received_confirmation";
   suggested_user_action:
     | "none"
-    | "confirm_wire_sent"
     | "confirm_earnest_complete";
   confidence: number;
   reason: string;
@@ -33,7 +32,7 @@ export const earnestInboundSignalSchema = {
     },
     suggested_user_action: {
       type: "string",
-      enum: ["none", "confirm_wire_sent", "confirm_earnest_complete"],
+      enum: ["none", "confirm_earnest_complete"],
     },
     confidence: {
       type: "number",

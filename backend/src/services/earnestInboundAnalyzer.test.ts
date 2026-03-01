@@ -29,7 +29,7 @@ describe("analyzeEarnestInboundEmail", () => {
     });
     vi.mocked(requestStructuredJson).mockResolvedValue({
       earnest_signal: "wire_instructions_provided",
-      suggested_user_action: "confirm_wire_sent",
+      suggested_user_action: "confirm_earnest_complete",
       confidence: 0.91,
       reason: "The email explicitly provides wiring instructions and says funds will be confirmed later.",
       warnings: [],
@@ -45,7 +45,7 @@ describe("analyzeEarnestInboundEmail", () => {
 
     expect(result.pipeline_label).toBe("earnest_money");
     expect(result.earnest_signal).toBe("wire_instructions_provided");
-    expect(result.suggested_user_action).toBe("confirm_wire_sent");
+    expect(result.suggested_user_action).toBe("confirm_earnest_complete");
     expect(result.summary).toContain("wiring instructions");
   });
 
@@ -117,7 +117,7 @@ describe("analyzeEarnestInboundEmail", () => {
     });
     vi.mocked(requestStructuredJson).mockResolvedValue({
       earnest_signal: "wire_instructions_provided",
-      suggested_user_action: "confirm_wire_sent",
+      suggested_user_action: "confirm_earnest_complete",
       confidence: 0.55,
       reason: "The email hints at sending funds but does not clearly provide instructions.",
       warnings: ["Signal confidence is low."],
@@ -133,6 +133,6 @@ describe("analyzeEarnestInboundEmail", () => {
 
     expect(result.confidence).toBe(0.55);
     expect(result.warnings).toContain("Signal confidence is low.");
-    expect(result.suggested_user_action).toBe("confirm_wire_sent");
+    expect(result.suggested_user_action).toBe("confirm_earnest_complete");
   });
 });

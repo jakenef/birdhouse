@@ -3,6 +3,7 @@ import type { Contact, ContactInput } from "../types/contact";
 const CONTACTS_DELETED_STORAGE_KEY = "settings_contacts_deleted_ids";
 const CONTACTS_CACHE_STORAGE_KEY = "settings_contacts_cache_v1";
 const ESCROW_CONTACT_TYPE = "escrow_officer";
+export const CONTACTS_UPDATED_EVENT = "bh:contacts-updated";
 
 type ApiContact = {
   type: string;
@@ -157,6 +158,14 @@ function clearDeletedId(id: string): void {
   writeDeletedContactIds(ids);
 }
 
+function dispatchContactsUpdated(type: string): void {
+  window.dispatchEvent(
+    new CustomEvent(CONTACTS_UPDATED_EVENT, {
+      detail: { type },
+    }),
+  );
+}
+
 export async function getContacts(): Promise<Contact[]> {
   const deletedIds = readDeletedContactIds();
 
@@ -218,7 +227,9 @@ export async function createContact(input: ContactInput): Promise<Contact> {
     }
 
     clearDeletedId(payload.contact.type);
-    return mergeAndPersistContact(normalizeContact(payload.contact));
+    const contact = mergeAndPersistContact(normalizeContact(payload.contact));
+    dispatchContactsUpdated(payload.contact.type);
+    return contact;
   } catch (error) {
     if (error instanceof TypeError) {
       const localContact = mergeAndPersistContact({
@@ -228,6 +239,7 @@ export async function createContact(input: ContactInput): Promise<Contact> {
         updatedAt: new Date().toISOString(),
       });
       clearDeletedId(localContact.id);
+      dispatchContactsUpdated(type);
       return localContact;
     }
 
@@ -262,7 +274,9 @@ export async function updateContact(
     }
 
     clearDeletedId(payload.contact.type);
-    return mergeAndPersistContact(normalizeContact(payload.contact));
+    const contact = mergeAndPersistContact(normalizeContact(payload.contact));
+    dispatchContactsUpdated(payload.contact.type);
+    return contact;
   } catch (error) {
     if (error instanceof TypeError) {
       const localContact = mergeAndPersistContact({
@@ -272,6 +286,7 @@ export async function updateContact(
         updatedAt: new Date().toISOString(),
       });
       clearDeletedId(localContact.id);
+      dispatchContactsUpdated(ESCROW_CONTACT_TYPE);
       return localContact;
     }
 
@@ -286,6 +301,7 @@ export async function deleteContact(
   const deletedIds = readDeletedContactIds();
   deletedIds.add(id);
   writeDeletedContactIds(deletedIds);
+  dispatchContactsUpdated(id);
 
   return {
     localOnly: true,

@@ -43,7 +43,6 @@ export type EarnestDraftState = {
 export type EarnestPendingUserAction =
   | "none"
   | "send_earnest_email"
-  | "confirm_wire_sent"
   | "confirm_earnest_complete";
 
 export type EarnestAgentSuggestion = {

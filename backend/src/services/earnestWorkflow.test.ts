@@ -277,7 +277,7 @@ describe("EarnestWorkflowService", () => {
     expect(earnest.send_state.thread_id).toBeTruthy();
   });
 
-  it("prompts the user to confirm wire sent after a high-confidence wiring email", async () => {
+  it("prompts the user to complete earnest after a high-confidence wiring email", async () => {
     const earnest = await service.applyInboxAnalysis("prop_1", "im_wire", "thr_wire", {
       version: 1,
       pipeline_label: "earnest_money",
@@ -285,19 +285,19 @@ describe("EarnestWorkflowService", () => {
       confidence: 0.92,
       reason: "The email explicitly provides wiring instructions.",
       earnest_signal: "wire_instructions_provided",
-      suggested_user_action: "confirm_wire_sent",
+      suggested_user_action: "confirm_earnest_complete",
       warnings: [],
       analyzed_at_iso: "2026-02-28T01:00:00.000Z",
     });
 
     expect(earnest.step_status).toBe("action_needed");
-    expect(earnest.pending_user_action).toBe("confirm_wire_sent");
+    expect(earnest.pending_user_action).toBe("confirm_earnest_complete");
     expect(earnest.latest_email_analysis.earnest_signal).toBe(
       "wire_instructions_provided",
     );
   });
 
-  it("returns to waiting_for_parties when the user confirms the wire was sent", async () => {
+  it("allows wiring instructions to lead directly to earnest completion", async () => {
     await service.applyInboxAnalysis("prop_1", "im_wire", "thr_wire", {
       version: 1,
       pipeline_label: "earnest_money",
@@ -305,30 +305,17 @@ describe("EarnestWorkflowService", () => {
       confidence: 0.92,
       reason: "The email explicitly provides wiring instructions.",
       earnest_signal: "wire_instructions_provided",
-      suggested_user_action: "confirm_wire_sent",
+      suggested_user_action: "confirm_earnest_complete",
       warnings: [],
       analyzed_at_iso: "2026-02-28T01:00:00.000Z",
     });
 
-    const earnest = await service.confirmWireSent("prop_1");
-
-    expect(earnest.step_status).toBe("waiting_for_parties");
-    expect(earnest.pending_user_action).toBe("none");
+    const completed = await service.confirmComplete("prop_1");
+    expect(completed.step_status).toBe("completed");
+    expect(completed.pending_user_action).toBe("none");
   });
 
-  it("allows receipt confirmation to supersede the earlier wire prompt and complete earnest", async () => {
-    await service.applyInboxAnalysis("prop_1", "im_wire", "thr_wire", {
-      version: 1,
-      pipeline_label: "earnest_money",
-      summary: "Escrow sent secure wiring instructions.",
-      confidence: 0.92,
-      reason: "The email explicitly provides wiring instructions.",
-      earnest_signal: "wire_instructions_provided",
-      suggested_user_action: "confirm_wire_sent",
-      warnings: [],
-      analyzed_at_iso: "2026-02-28T01:00:00.000Z",
-    });
-
+  it("still supports completion when a receipt confirmation email arrives later", async () => {
     const receiptPrompt = await service.applyInboxAnalysis(
       "prop_1",
       "im_receipt",
@@ -348,9 +335,5 @@ describe("EarnestWorkflowService", () => {
 
     expect(receiptPrompt.pending_user_action).toBe("confirm_earnest_complete");
     expect(receiptPrompt.latest_email_analysis.message_id).toBe("im_receipt");
-
-    const completed = await service.confirmComplete("prop_1");
-    expect(completed.step_status).toBe("completed");
-    expect(completed.pending_user_action).toBe("none");
   });
 });

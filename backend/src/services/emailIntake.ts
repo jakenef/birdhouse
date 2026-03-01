@@ -31,6 +31,28 @@ function log(msg: string) {
   console.log(`[intake] ${msg}`);
 }
 
+function isOnOrAfterCutoff(
+  candidateIso: string | null | undefined,
+  cutoffIso: string,
+): boolean {
+  if (!candidateIso) {
+    return false;
+  }
+
+  const candidateMs = Date.parse(candidateIso);
+  const cutoffMs = Date.parse(cutoffIso);
+
+  if (Number.isNaN(candidateMs) || Number.isNaN(cutoffMs)) {
+    return false;
+  }
+
+  return candidateMs >= cutoffMs;
+}
+
+function getProviderCreatedAt(email: any): string | null {
+  return typeof email?.created_at === "string" ? email.created_at : null;
+}
+
 function downloadBuffer(url: string): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     const mod = url.startsWith("https") ? https : http;
@@ -382,6 +404,7 @@ async function pollOnce(
   earnestWorkflowService: EarnestWorkflowService,
   inboxStore: InboxStore,
   earnestInboxAutomation: EarnestInboxAutomation,
+  propertyEmailSessionStartedAtIso: string,
 ): Promise<void> {
   const { data: listData, error: listError } =
     await resend.emails.receiving.list();
@@ -424,6 +447,13 @@ async function pollOnce(
         }
         intakeEmails.push({ email, targetEmail });
       } else {
+        const createdAt = getProviderCreatedAt(email);
+        if (!isOnOrAfterCutoff(createdAt, propertyEmailSessionStartedAtIso)) {
+          log(
+            `skip pre-session property email ${email.id} created_at=${createdAt ?? "unknown"} cutoff=${propertyEmailSessionStartedAtIso}`,
+          );
+          continue;
+        }
         propertyEmails.push({ email, targetEmail });
       }
     }
@@ -495,6 +525,14 @@ async function pollOnce(
       const property = await store.findByPropertyEmail(fromEmail.toLowerCase());
       if (!property) {
         await markEmailProcessed(processedSentId);
+        continue;
+      }
+
+      const createdAt = getProviderCreatedAt(sentEmail);
+      if (!isOnOrAfterCutoff(createdAt, propertyEmailSessionStartedAtIso)) {
+        log(
+          `skip pre-session sent property email ${sentEmail.id} created_at=${createdAt ?? "unknown"} cutoff=${propertyEmailSessionStartedAtIso}`,
+        );
         continue;
       }
 
@@ -578,8 +616,9 @@ export function startEmailPolling(
   }
 
   const resend = new Resend(apiKey);
+  const propertyEmailSessionStartedAtIso = new Date().toISOString();
   log(
-    `polling ${INTAKE_ADDRESS} every ${POLL_INTERVAL_MS / 1000}s (parse: ${canParse() ? "on" : "off"})`,
+    `polling ${INTAKE_ADDRESS} every ${POLL_INTERVAL_MS / 1000}s (parse: ${canParse() ? "on" : "off"}) property-email cutoff: ${propertyEmailSessionStartedAtIso}`,
   );
 
   pollOnce(
@@ -589,6 +628,7 @@ export function startEmailPolling(
     earnestWorkflowService,
     inboxStore,
     earnestInboxAutomation,
+    propertyEmailSessionStartedAtIso,
   ).catch((error) =>
     log(
       `poll error: ${error instanceof Error ? error.message : String(error)}`,
@@ -603,6 +643,7 @@ export function startEmailPolling(
       earnestWorkflowService,
       inboxStore,
       earnestInboxAutomation,
+      propertyEmailSessionStartedAtIso,
     ).catch((error) =>
       log(
         `poll error: ${error instanceof Error ? error.message : String(error)}`,
@@ -618,3 +659,9 @@ export function stopEmailPolling(): void {
     log("stopped");
   }
 }
+
+export const __testing = {
+  isOnOrAfterCutoff,
+  getProviderCreatedAt,
+  pollOnce,
+};

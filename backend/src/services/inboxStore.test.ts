@@ -444,7 +444,7 @@ describe("InboxStore", () => {
         confidence: 0.92,
         reason: "Explicit wiring instructions were attached to the email.",
         earnest_signal: "wire_instructions_provided",
-        suggested_user_action: "confirm_wire_sent",
+        suggested_user_action: "confirm_earnest_complete",
         warnings: [],
         analyzed_at_iso: "2026-02-28T12:05:00.000Z",
       });
