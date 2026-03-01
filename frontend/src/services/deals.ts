@@ -17,6 +17,7 @@ type ApiProperty = {
   purchase_price: number | null;
   effective_date: string | null;
   settlement_deadline: string | null;
+  pipeline_stage: string;
   created_at_iso: string;
   updated_at_iso: string;
   street_view?: ApiStreetView;
@@ -204,16 +205,24 @@ function urgencyFromDays(days: number): { label: string; tone: UrgencyTone } {
   return { label: "Due soon", tone: "warning" };
 }
 
-function statusFromDays(days: number): string {
-  if (days <= 2) {
-    return "Closing";
+function mapPipelineStageToStatus(pipelineStage: string): string {
+  switch (pipelineStage) {
+    case "earnest_money":
+      return "Earnest";
+    case "closing":
+      return "Closing";
+    case "inspections":
+    case "due_diligence_inspection":
+      return "Due Diligence";
+    case "financing":
+      return "Financing";
+    case "appraisal":
+      return "Appraisal";
+    case "title_escrow":
+      return "Title & Escrow";
+    default:
+      return "Under Contract";
   }
-
-  if (days <= 14) {
-    return "Under Contract";
-  }
-
-  return "Due Diligence";
 }
 
 function formatCityState(
@@ -265,7 +274,7 @@ function mapApiPropertyToDeal(property: ApiProperty, index: number): Deal {
     cityState: formatCityState(property.city, property.state, property.zip),
     propertyEmail,
     imageUrl,
-    status: statusFromDays(daysToClose),
+    status: mapPipelineStageToStatus(property.pipeline_stage),
     urgencyLabel: urgency.label,
     urgencyTone: urgency.tone,
     offerPrice: property.purchase_price ?? 0,

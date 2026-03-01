@@ -13,6 +13,10 @@ export interface PropertyStore {
     id: string,
     workflowState: PropertyWorkflowState,
   ): Promise<StoredPropertyRecord>;
+  updatePipelineStage(
+    id: string,
+    pipelineStage: string,
+  ): Promise<StoredPropertyRecord>;
   updateStreetView(
     id: string,
     streetView: StreetViewCacheEntry,
